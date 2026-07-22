@@ -6,7 +6,7 @@ Personal YouTube-dictation study app (single user). See [README.md](./README.md)
 
 ```bash
 pnpm install
-pnpm test         # vitest — shared/chunker.ts only today
+pnpm test         # vitest — shared/*.test.ts only today (chunker.ts, dictation.ts)
 pnpm type-check    # vue-tsc for src/, tsc for worker/ (two separate tsconfigs, one command)
 pnpm lint          # vp lint . --fix — close to vite-plus's own defaults, see Gotchas
 pnpm format        # vp fmt .
@@ -27,7 +27,7 @@ pnpm cf-typegen    # regenerate worker-configuration.d.ts after editing wrangler
 ├── worker/                  # single Cloudflare Worker, bundled by @cloudflare/vite-plugin (ADR-004)
 │   ├── index.ts             # fetch(request, env, ctx) — routes by hand, then falls back to env.ASSETS.fetch()
 │   └── routes/              # one file per resource, not per HTTP method (unlike the old Pages Functions layout)
-├── shared/                  # chunker.ts + types.ts, imported by both src/ and worker/
+├── shared/                  # chunker.ts (src/+worker/) + dictation.ts (src/ only) + types.ts — the only dir vitest covers
 ├── db/schema.sql             # D1 schema (videos/chunks/progress); applied via `wrangler d1 migrations` (migrations_dir in wrangler.jsonc), not yet run against a real D1 instance
 ├── docs/design.md            # architecture + status, in Japanese
 ├── docs/adr/                 # one ADR per architectural decision, in English
@@ -42,6 +42,7 @@ pnpm cf-typegen    # regenerate worker-configuration.d.ts after editing wrangler
 ## Key Files
 
 - Change how captions are split into chunks: `shared/chunker.ts` (`parseJson3Captions`, `chunkWords`) — shared by the SPA and the Worker, keep it that way rather than duplicating logic.
+- Change how a typed answer is graded: `shared/dictation.ts` (`diffWords`, `isPerfectMatch`) — an LCS word-alignment diff, not simple positional comparison, so a single skipped/added word doesn't cascade into marking everything after it wrong. Only consumed by `src/views/player-view.vue` today, but lives in `shared/` because that's the only directory `vitest.config.ts` covers.
 - Add an API route: add a handler function to `worker/routes/*.ts` (plain `(db, ...) => Promise<Response>`, no framework-specific handler type) and wire it into `worker/index.ts`'s `routeApi`/`routeVideoDetail` routing — there's no file-based routing here, unlike the old Pages Functions setup.
 - D1 access inside the Worker is just `env.DB` (passed down as a plain `D1Database` argument to route functions) — query with `db/schema.sql`'s column names (snake_case in SQL, mapped to camelCase `shared/types.ts` shapes by small `toX` mapper functions in each route file). The `Env` type itself is global ambient, generated from `wrangler.jsonc` by `wrangler types` — there's no `worker/types.ts` to hand-edit; add a binding to `wrangler.jsonc` and run `pnpm cf-typegen`.
 - Chunk-loop playback: `src/views/player-view.vue` + `src/youtube-iframe-api.ts`. Playback must only ever start from a user tap (`playCurrentChunk`), never automatically — mobile browsers block autoplay otherwise.

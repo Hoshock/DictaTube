@@ -1,5 +1,7 @@
 <script setup lang="ts"></script>
 
 <template>
-  <router-view />
+  <div class="min-h-dvh bg-surface">
+    <router-view />
+  </div>
 </template>

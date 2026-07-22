@@ -1,4 +1,4 @@
-import type { Chunk, Video } from "@shared/types"
+import type { Chunk, Progress, Video } from "@shared/types"
 
 /**
  * GitHub Pages のdevプレビュー用モックデータ。
@@ -32,4 +32,17 @@ export const demoChunksByVideoId: Record<string, Chunk[]> = {
     { index: 0, startMs: 0, endMs: 7800, text: "never gonna give you up" },
     { index: 1, startMs: 7800, endMs: 15_600, text: "never gonna let you down" },
   ],
+}
+
+export const demoProgressByVideoId: Record<string, Progress[]> = {
+  "demo-1": [
+    {
+      videoId: "demo-1",
+      chunkIndex: 0,
+      cleared: true,
+      attempts: 2,
+      updatedAt: "2026-07-22T00:00:00Z",
+    },
+  ],
+  "demo-2": [],
 }

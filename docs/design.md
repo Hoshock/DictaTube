@@ -81,7 +81,8 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 - wrangler 4.112.0 導入済み。brew の cloudflare-wrangler を使う (npx 経由は社内証明書の検証で失敗する)
 - wrangler login は未実施
 - Zero Trust の GitHub IdP 接続とWorkerのカスタムドメイン設定も未実施。scaffold の段階で設定する
-- ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)・ステップ3(Player + チャンクループ、YouTube IFrame Player API)はコードレベルで完了。progress保存APIも先行実装済み。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Access・YouTube再生に対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過、UIの見た目とルーティングはGitHub Pagesのdevプレビューで確認済み)
+- ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)・ステップ3(Player + チャンクループ、YouTube IFrame Player API)・ステップ5(ディクテーション単語diff判定 + 進捗保存)はコードレベルで完了。単語diffはLCSで位置ずれ(単語の抜け・言い足し)に対応(`shared/dictation.ts`、単体テストあり)。進捗取得API(`GET /api/videos/:id/progress`)も追加し、保存済みAPIと合わせてPlayer画面のクリア状況表示・再開に利用。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Access・YouTube再生に対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過、UIの見た目とルーティングはGitHub Pagesのdevプレビューで確認済み)
+- あわせてUIを全面刷新(ダークテーマ、モバイルファースト、safe-area対応、チャンク進捗ドット、ホーム画面のサムネイルカード)。サムネイル画像読み込み失敗時はプレースホルダーにフォールバックする
 - ステップ0(字幕取得スパイク)とステップ4(import)は未着手。Cloudflareにログインできる環境での作業が必要
 - ディレクトリ構成をNuxt4化する案を検討したが、Childが実はNuxtを使っていない(AWS SAM/CloudFormationの静的サイトサンプル)ことが判明し撤回。代わりに素のVite標準の`src/`命名と、Cloudflareの現行推奨である`@cloudflare/vite-plugin`+Workersへの移行を実施 ([ADR-004](./adr/004-cloudflare-workers-vite-plugin.md))
 - `develop`ブランチを新設し、`main`は本番専用に整理 ([ADR-005](./adr/005-develop-main-branch-deploy-split.md))。`main`へのpushをトリガーに`deploy-production.yml`でCloudflare Workersへ自動デプロイする仕組みも追加したが、**まだ成功しない**: `CLOUDFLARE_API_TOKEN`をリポジトリのSecretsに登録する作業と、`wrangler.jsonc`のD1 `database_id`(現在プレースホルダの`REPLACE_WITH_D1_DATABASE_ID`)を実際のD1インスタンスのIDに置き換える作業が、どちらもオーナー自身のマシンでの`wrangler`ログインを前提とするため未完了

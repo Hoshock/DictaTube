@@ -1,6 +1,15 @@
+import type { Progress } from "@shared/types"
+
 const CLEARED_VALUE = 1
 const NOT_CLEARED_VALUE = 0
 const INVALID_BODY_STATUS = 400
+
+interface ProgressRow {
+  chunk_index: number
+  cleared: number
+  attempts: number
+  updated_at: string
+}
 
 interface ProgressRequestBody {
   videoId: string
@@ -25,6 +34,25 @@ const toClearedValue = (cleared: boolean): number => {
     return CLEARED_VALUE
   }
   return NOT_CLEARED_VALUE
+}
+
+const toProgress = (videoId: string, row: ProgressRow): Progress => ({
+  videoId,
+  chunkIndex: row.chunk_index,
+  cleared: row.cleared === CLEARED_VALUE,
+  attempts: row.attempts,
+  updatedAt: row.updated_at,
+})
+
+export const getVideoProgress = async (db: D1Database, videoId: string): Promise<Response> => {
+  const { results } = await db
+    .prepare(
+      "SELECT chunk_index, cleared, attempts, updated_at FROM progress WHERE video_id = ?1 ORDER BY chunk_index ASC",
+    )
+    .bind(videoId)
+    .all<ProgressRow>()
+
+  return Response.json(results.map((row) => toProgress(videoId, row)))
 }
 
 export const saveProgress = async (db: D1Database, request: Request): Promise<Response> => {
