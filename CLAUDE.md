@@ -8,7 +8,7 @@ Personal YouTube-dictation study app (single user). See [README.md](./README.md)
 pnpm install
 pnpm test         # vitest — shared/chunker.ts only today
 pnpm type-check    # vue-tsc for src/, tsc for worker/ (two separate tsconfigs, one command)
-pnpm lint          # vp lint . --fix — see Gotchas before trusting --fix blindly
+pnpm lint          # vp lint . --fix — close to vite-plus's own defaults, see Gotchas
 pnpm format        # vp fmt .
 pnpm build         # vite build; add VITE_DEMO_MODE=true VITE_BASE_PATH=/DictaTube/ to reproduce the GitHub Pages build locally
 pnpm dev           # vite dev server
@@ -45,14 +45,12 @@ pnpm dev           # vite dev server
 ## Code Style
 
 - User-facing docs (`README.md`, `docs/design.md`) and commit messages are Japanese; ADRs (`docs/adr/`) and this file are English; code identifiers are always English.
-- Vue SFC and `src/`-level `.ts` filenames are kebab-case (`home-view.vue`, not `HomeView.vue`) — enforced by `unicorn/filename-case`.
-- No `null` and no bare `undefined` identifier in expressions (`unicorn/no-null`, `eslint/no-undefined`, both `error`). Represent "no value yet" with an uninitialized `let x: T | undefined` (see Gotchas) and check truthiness (`if (x)`), not `=== undefined`/`=== null`.
-- No ternaries, no optional chaining (`?.`), functions capped at 10 statements and 3 params — write `if`/`else` with early returns and small named helpers instead. No magic numbers, including `0`/`1`/`-1` — name them even when the name feels redundant. Regex capture groups must be named (`(?<videoId>...)`), not positional.
+- Vue SFC and `src/`-level `.ts` filenames are kebab-case (`home-view.vue`, not `HomeView.vue`) by convention — not currently lint-enforced (see Gotchas), just keep matching the existing files.
 
 ## Tech Stack
 
 - Frontend: Vue 3 + TypeScript + Tailwind 4, built with `vite-plus` (the `vp` CLI wraps Vite, oxlint, and oxfmt) + pnpm.
-- Backend (prod only): a single Cloudflare Worker (`worker/`) bundled by `@cloudflare/vite-plugin`, not Cloudflare Pages Functions — see [ADR-004](./docs/adr/004-cloudflare-workers-vite-plugin.md) for why, and for what this deliberately does *not* copy from `NCPD-Template-Child` (it doesn't use Nuxt; its nested `src/app/` is an AWS-CDK-monorepo convention that doesn't apply here).
+- Backend (prod only): a single Cloudflare Worker (`worker/`) bundled by `@cloudflare/vite-plugin`, not Cloudflare Pages Functions — see [ADR-004](./docs/adr/004-cloudflare-workers-vite-plugin.md) for why, and for what this deliberately does _not_ copy from `NCPD-Template-Child` (it doesn't use Nuxt; its nested `src/app/` is an AWS-CDK-monorepo convention that doesn't apply here).
 - Data (prod only): Cloudflare D1, accessed as `env.DB` inside the Worker. GitHub repo holds source only, no data (`docs/adr/002`).
 - Auth (prod only): Cloudflare Access + GitHub IdP, owner-only (`docs/adr/001`).
 - Dev preview: GitHub Pages, mock data only, no backend (`docs/adr/003`) — only `dist/client` is uploaded there, never the Worker build.
@@ -71,8 +69,9 @@ pnpm dev           # vite dev server
 
 ## Gotchas
 
-- `vp lint . --fix` flip-flops forever on two rule pairs: `oxc/no-rest-spread-properties` ↔ `eslint/prefer-object-spread`, and `eslint/no-undefined` ↔ `unicorn/no-typeof-undefined`. `vite.config.ts`'s `lint.rules` disables the losing side of each pair; don't re-enable them without re-running `npx vp lint .` (no `--fix`) to confirm both sides don't still fire.
-- `no-null` + `no-undefined` together make it impossible to *initialize* an optional local to "no value yet" without one of the banned literals, but `init-declarations`'s default mode also forces every `let` to have an initializer. Both constraints can't hold at once, so `init-declarations` is `"off"` — don't turn it back on without solving that first.
+- `vite.config.ts`'s `lint` block was originally copied from `NCPD-Template-Child`'s `site-sample`, which hand-sets `categories` to `error` across `correctness`/`style`/`restriction`. That forced a full rewrite to avoid ternaries, optional chaining, magic numbers, >10-statement functions, and non-kebab-case filenames — and two of those categories being `error` simultaneously created self-contradicting rule pairs (`--fix` flip-flopping between `oxc/no-rest-spread-properties` ↔ `eslint/prefer-object-spread`, and `eslint/no-undefined` ↔ `unicorn/no-typeof-undefined`). That explicit `categories`/`rules` block was later dropped in favor of `vite-plus`'s own defaults (`lint.options.typeAware`/`typeCheck`, no explicit `categories`) to get closer to zero-config. The code still happens to follow those stricter conventions, but **lint no longer enforces them** — don't assume a reintroduced ternary/magic-number/`?.`/PascalCase-filename will be caught.
+- `lint.options.typeAware`/`typeCheck` type-checks `worker/` too, but only because `tsconfig.json` explicitly references `tsconfig.worker.json` (added alongside `tsconfig.app.json`/`tsconfig.node.json`) — without that reference the type-aware linter silently only sees `src/`. Verified by deliberately introducing a typo'd D1 method call and confirming `vp lint` caught it.
+- `vite.config.ts`'s `staged: { "*": "vp check --fix" }` (a pre-commit hook) is currently inert — it only actually installs a git hook once `vp config` has been run (typically wired as `"prepare": "vp config"` in `package.json`, not yet added here). Don't assume commits are being checked until that's confirmed.
 - `vite-plus`'s bundled test runner (`@voidzero-dev/vite-plus-test`, exposed as `vp test`) crashes (`Cannot read properties of undefined`) when it loads `vite.config.ts`'s `defineConfig`. Real `vitest` + a separate plain `vitest.config.ts` sidesteps it; don't switch `pnpm test` back to `vp test` without confirming that's fixed upstream.
 - `NCPD-Template-Child` does **not** use Nuxt — its `site-sample` is a plain Vite+Vue3 static site inside an AWS SAM/CloudFormation template, and its nested `src/app/` layout is an artifact of that repo being a multi-service AWS CDK monorepo. Don't assume anything in this repo's structure should mirror Child beyond "it's also Vite+Vue".
 - GitHub Pages needs no manual repo setting — `actions/configure-pages` (in `gh-pages.yml`) calls the Pages API's `findOrCreatePagesSite` and enables the site itself on first run, given the workflow's `pages: write` permission.

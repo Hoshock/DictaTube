@@ -20,13 +20,13 @@ Cloudflare Workers (dictatube.workers.dev)
 [GitHub: Hoshock/DictaTube (ソースコードのみ)]
 ```
 
-| レイヤ     | 採用                                  | 補足                                                                                              |
-| ---------- | ------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 配信 + API | Cloudflare Workers (`@cloudflare/vite-plugin`) | GitHub push で自動デプロイ。Pages Functionsから変更。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md) |
-| 認証       | Cloudflare Access + GitHub IdP        | Hoshock のみ許可。[ADR-001](./adr/001-cloudflare-pages-access-hosting-auth.md)                    |
-| データ     | Cloudflare D1                         | GitHub 認証情報を持たない。[ADR-002](./adr/002-d1-data-store.md)                                  |
-| 動画再生   | YouTube IFrame Player API             | チャンクループは seekTo + ポーリング                                                              |
-| フロント   | Vue 3 + TypeScript + Vite Plus + pnpm | `src/` は素のVite標準 (Childの入れ子`src/app/`とは事情が違う。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md)) |
+| レイヤ     | 採用                                           | 補足                                                                                                                  |
+| ---------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 配信 + API | Cloudflare Workers (`@cloudflare/vite-plugin`) | GitHub push で自動デプロイ。Pages Functionsから変更。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md)           |
+| 認証       | Cloudflare Access + GitHub IdP                 | Hoshock のみ許可。[ADR-001](./adr/001-cloudflare-pages-access-hosting-auth.md)                                        |
+| データ     | Cloudflare D1                                  | GitHub 認証情報を持たない。[ADR-002](./adr/002-d1-data-store.md)                                                      |
+| 動画再生   | YouTube IFrame Player API                      | チャンクループは seekTo + ポーリング                                                                                  |
+| フロント   | Vue 3 + TypeScript + Vite Plus + pnpm          | `src/` は素のVite標準 (Childの入れ子`src/app/`とは事情が違う。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md)) |
 
 すべて無料枠に収まる。
 
