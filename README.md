@@ -17,5 +17,5 @@ pnpm build         # 本番ビルド (dist/client: 静的配信, dist/dictatube:
 
 ## デプロイ先
 
-- **本番**: Cloudflare Workers + Access + D1 ([ADR-001](./docs/adr/001-cloudflare-pages-access-hosting-auth.md), [ADR-002](./docs/adr/002-d1-data-store.md), [ADR-004](./docs/adr/004-cloudflare-workers-vite-plugin.md))
-- **devプレビュー**: GitHub Pages。バックエンドがないためモックデータで見た目だけ確認する ([ADR-003](./docs/adr/003-github-pages-dev-preview.md))
+- **本番**: `main`ブランチへのpushで`deploy-production.yml`がCloudflare Workers + Access + D1に自動デプロイ ([ADR-001](./docs/adr/001-cloudflare-pages-access-hosting-auth.md), [ADR-002](./docs/adr/002-d1-data-store.md), [ADR-004](./docs/adr/004-cloudflare-workers-vite-plugin.md), [ADR-005](./docs/adr/005-develop-main-branch-deploy-split.md))
+- **devプレビュー**: `develop`ブランチへのpushで`gh-pages.yml`がGitHub Pagesにデプロイ。バックエンドがないためモックデータで見た目だけ確認する ([ADR-003](./docs/adr/003-github-pages-dev-preview.md))

@@ -1,0 +1,34 @@
+name: Deploy production to Cloudflare Workers
+
+# 本番デプロイ。GitHub Pagesのdevプレビュー(develop, gh-pages.yml)とは別経路。
+# CLOUDFLARE_API_TOKEN (Workers Scripts:Edit + Pages:Edit相当の権限を持つトークン) を
+# リポジトリのSecretsに登録しておくこと。未登録の間はこのワークフローは失敗する。
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy

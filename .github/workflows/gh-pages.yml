@@ -5,8 +5,7 @@ name: Deploy dev preview to GitHub Pages
 on:
   push:
     branches:
-      - main
-      - "claude/**"
+      - develop
   workflow_dispatch: {}
 
 permissions:

@@ -16,17 +16,18 @@ Cloudflare Workers (dictatube.workers.dev)
          ├─ D1: videos / chunks / progress
          └─ YouTube 字幕取得 (経路はスパイクで確定)
     ▲
-    │ push で自動デプロイ
+    │ mainへのpushで自動デプロイ (deploy-production.yml)
 [GitHub: Hoshock/DictaTube (ソースコードのみ)]
+    develop ブランチへのpushはGitHub Pagesのdevプレビューに向く (別経路、下記参照)
 ```
 
-| レイヤ     | 採用                                           | 補足                                                                                                                  |
-| ---------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| 配信 + API | Cloudflare Workers (`@cloudflare/vite-plugin`) | GitHub push で自動デプロイ。Pages Functionsから変更。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md)           |
-| 認証       | Cloudflare Access + GitHub IdP                 | Hoshock のみ許可。[ADR-001](./adr/001-cloudflare-pages-access-hosting-auth.md)                                        |
-| データ     | Cloudflare D1                                  | GitHub 認証情報を持たない。[ADR-002](./adr/002-d1-data-store.md)                                                      |
-| 動画再生   | YouTube IFrame Player API                      | チャンクループは seekTo + ポーリング                                                                                  |
-| フロント   | Vue 3 + TypeScript + Vite Plus + pnpm          | `src/` は素のVite標準 (Childの入れ子`src/app/`とは事情が違う。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md)) |
+| レイヤ     | 採用                                           | 補足                                                                                                                                                                                                   |
+| ---------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 配信 + API | Cloudflare Workers (`@cloudflare/vite-plugin`) | mainへのpush で自動デプロイ (`cloudflare/wrangler-action`)。Pages Functionsから変更。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md) / [ADR-005](./adr/005-develop-main-branch-deploy-split.md) |
+| 認証       | Cloudflare Access + GitHub IdP                 | Hoshock のみ許可。[ADR-001](./adr/001-cloudflare-pages-access-hosting-auth.md)                                                                                                                         |
+| データ     | Cloudflare D1                                  | GitHub 認証情報を持たない。[ADR-002](./adr/002-d1-data-store.md)                                                                                                                                       |
+| 動画再生   | YouTube IFrame Player API                      | チャンクループは seekTo + ポーリング                                                                                                                                                                   |
+| フロント   | Vue 3 + TypeScript + Vite Plus + pnpm          | `src/` は素のVite標準 (Childの入れ子`src/app/`とは事情が違う。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md))                                                                                  |
 
 すべて無料枠に収まる。
 
@@ -83,7 +84,8 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 - ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)・ステップ3(Player + チャンクループ、YouTube IFrame Player API)はコードレベルで完了。progress保存APIも先行実装済み。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Access・YouTube再生に対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過、UIの見た目とルーティングはGitHub Pagesのdevプレビューで確認済み)
 - ステップ0(字幕取得スパイク)とステップ4(import)は未着手。Cloudflareにログインできる環境での作業が必要
 - ディレクトリ構成をNuxt4化する案を検討したが、Childが実はNuxtを使っていない(AWS SAM/CloudFormationの静的サイトサンプル)ことが判明し撤回。代わりに素のVite標準の`src/`命名と、Cloudflareの現行推奨である`@cloudflare/vite-plugin`+Workersへの移行を実施 ([ADR-004](./adr/004-cloudflare-workers-vite-plugin.md))
+- `develop`ブランチを新設し、`main`は本番専用に整理 ([ADR-005](./adr/005-develop-main-branch-deploy-split.md))。`main`へのpushをトリガーに`deploy-production.yml`でCloudflare Workersへ自動デプロイする仕組みも追加したが、**まだ成功しない**: `CLOUDFLARE_API_TOKEN`をリポジトリのSecretsに登録する作業と、`wrangler.jsonc`のD1 `database_id`(現在プレースホルダの`REPLACE_WITH_D1_DATABASE_ID`)を実際のD1インスタンスのIDに置き換える作業が、どちらもオーナー自身のマシンでの`wrangler`ログインを前提とするため未完了
 
 ## 開発時の見た目確認 (GitHub Pages)
 
-Cloudflareにログインできないサンドボックス環境からでも見た目を確認できるよう、GitHub ActionsでGitHub Pagesにdevプレビューをデプロイする ([ADR-003](./adr/003-github-pages-dev-preview.md))。バックエンドを持たないため `VITE_DEMO_MODE=true` ビルドでは `/api/*` を呼ばずモックデータ (`src/demo-data.ts`) を表示する。本番の判断基準にはならない (UIの見た目確認専用)。**手動設定が必要** — `gh-pages.yml`に`pages: write`があっても、`actions/configure-pages`はデフォルトのGITHUB_TOKENの権限だけではPagesサイトを新規作成できない (実際の失敗ログで確認: `enablement: false`のままだと未有効化リポジトリでは`Get Pages site`が404、`enablement: true`を試すと`Create Pages site failed: Resource not accessible by integration`)。リポジトリのオーナーがSettings → Pages → Build and deployment → SourceでGitHub Actionsを選ぶ一度だけの操作が必要。
+Cloudflareにログインできないサンドボックス環境からでも見た目を確認できるよう、`develop`ブランチへのpushをトリガーにGitHub ActionsでGitHub Pagesにdevプレビューをデプロイする ([ADR-003](./adr/003-github-pages-dev-preview.md)、ブランチトリガーは[ADR-005](./adr/005-develop-main-branch-deploy-split.md))。バックエンドを持たないため `VITE_DEMO_MODE=true` ビルドでは `/api/*` を呼ばずモックデータ (`src/demo-data.ts`) を表示する。本番の判断基準にはならない (UIの見た目確認専用)。**手動設定が必要** — `gh-pages.yml`に`pages: write`があっても、`actions/configure-pages`はデフォルトのGITHUB_TOKENの権限だけではPagesサイトを新規作成できない (実際の失敗ログで確認: `enablement: false`のままだと未有効化リポジトリでは`Get Pages site`が404、`enablement: true`を試すと`Create Pages site failed: Resource not accessible by integration`)。リポジトリのオーナーがSettings → Pages → Build and deployment → SourceでGitHub Actionsを選ぶ一度だけの操作が必要。
