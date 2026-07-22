@@ -197,13 +197,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="safe-area-inset mx-auto flex min-h-dvh max-w-md flex-col">
+  <main class="safe-area-inset mx-auto flex h-dvh max-w-md flex-col overflow-hidden">
     <p v-if="isLoading" class="p-4 text-ink-muted">読み込み中...</p>
     <p v-else-if="errorMessage" class="p-4 text-danger-500">{{ errorMessage }}</p>
 
     <template v-else>
       <header
-        class="sticky top-0 z-10 flex items-center gap-3 border-b border-border-subtle bg-surface/90 px-3 py-3 backdrop-blur"
+        class="flex shrink-0 items-center gap-3 border-b border-border-subtle bg-surface/90 px-3 py-3"
       >
         <RouterLink
           :to="{ name: 'home' }"
@@ -215,32 +215,27 @@ onBeforeUnmount(() => {
         <p class="min-w-0 flex-1 truncate text-sm font-medium text-ink">{{ video?.title }}</p>
       </header>
 
-      <div class="flex-1 overflow-y-auto px-4 pb-4 pt-3">
-        <div id="youtube-player" class="aspect-video w-full overflow-hidden rounded-2xl bg-black" />
+      <div class="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-3 pt-3">
+        <div
+          id="youtube-player"
+          class="aspect-video w-full shrink-0 overflow-hidden rounded-2xl bg-black"
+        />
 
-        <p v-if="!isPlayerReady" class="mt-2 text-center text-xs text-ink-muted">
+        <p v-if="!isPlayerReady" class="shrink-0 text-center text-xs text-ink-muted">
           プレーヤーを準備中...
         </p>
 
-        <template v-if="currentChunk">
-          <div
-            v-if="isSubtitleVisible"
-            class="mt-4 rounded-2xl border border-border-subtle bg-surface-raised p-4 text-lg leading-relaxed text-ink"
-          >
-            {{ currentChunk.text }}
-          </div>
-          <div
-            v-else
-            class="mt-4 flex items-center justify-center rounded-2xl border border-dashed border-border-subtle p-4 text-sm text-ink-muted"
-          >
-            字幕は非表示です(CCで表示)
-          </div>
-        </template>
-        <p v-else class="mt-4 text-ink-muted">この動画にはチャンクがまだありません。</p>
+        <div
+          v-if="currentChunk"
+          class="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border-subtle bg-surface-raised p-4 text-lg leading-relaxed text-ink"
+        >
+          <span v-if="isSubtitleVisible">{{ currentChunk.text }}</span>
+        </div>
+        <p v-else class="text-ink-muted">この動画にはチャンクがまだありません。</p>
       </div>
 
       <div
-        class="safe-area-bottom sticky bottom-0 flex flex-col gap-2 border-t border-border-subtle bg-surface/95 px-4 pt-3 backdrop-blur"
+        class="safe-area-bottom flex shrink-0 flex-col gap-2 border-t border-border-subtle bg-surface/95 px-4 pt-3"
       >
         <div class="flex gap-2">
           <button
@@ -275,8 +270,12 @@ onBeforeUnmount(() => {
           </button>
           <button
             type="button"
-            class="flex-1 rounded-xl border border-transparent py-2 text-sm font-semibold transition disabled:opacity-30"
-            :class="isPlaying ? 'bg-ink text-surface' : 'bg-brand-500 text-white'"
+            class="flex-1 rounded-xl border py-2 text-sm font-semibold transition disabled:opacity-30"
+            :class="
+              isPlaying
+                ? 'border-brand-500 bg-brand-500/10 text-brand-400'
+                : 'border-transparent text-ink-muted'
+            "
             :disabled="!isPlayerReady || !currentChunk"
             @click="togglePlayPause"
           >
@@ -287,7 +286,7 @@ onBeforeUnmount(() => {
             class="flex-1 rounded-xl border py-2 text-sm font-semibold transition disabled:opacity-30"
             :class="
               isRepeating
-                ? 'border-warning-500 bg-warning-500/10 text-warning-500'
+                ? 'border-brand-500 bg-brand-500/10 text-brand-400'
                 : 'border-transparent text-ink-muted'
             "
             @click="toggleRepeat"

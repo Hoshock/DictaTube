@@ -100,7 +100,7 @@ const createRemotePlaylist = async (name: string): Promise<Playlist> => {
   if (!response.ok) {
     throw new Error("プレイリストの作成に失敗しました")
   }
-  return { id, name, createdAt: new Date().toISOString() }
+  return { id, name, createdAt: new Date().toISOString(), position: -Date.now() }
 }
 
 const createAndSelectPlaylist = async (): Promise<void> => {

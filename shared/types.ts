@@ -5,12 +5,16 @@ export interface Video {
   durationMs: number
   createdAt: string
   playlistIds: string[]
+  /** 並び順キー。値が小さいほど上に表示される。未分類一覧での並び替えに使う。 */
+  position: number
 }
 
 export interface Playlist {
   id: string
   name: string
   createdAt: string
+  /** 並び順キー。値が小さいほど上に表示される。 */
+  position: number
 }
 
 export interface Word {

@@ -33,29 +33,39 @@ const thumbnailUrl = (youtubeId: string): string =>
 </script>
 
 <template>
-  <RouterLink
-    :to="{ name: 'player', params: { videoId: video.id } }"
-    class="group flex items-center gap-3 rounded-2xl border border-border-subtle bg-surface-raised p-2 transition active:scale-[0.98] active:bg-surface-overlay"
-  >
-    <div class="relative aspect-video w-28 shrink-0 overflow-hidden rounded-xl bg-surface-overlay">
-      <img
-        v-if="!isThumbnailBroken"
-        :src="thumbnailUrl(video.youtubeId)"
-        :alt="video.title"
-        loading="lazy"
-        class="h-full w-full object-cover"
-        @error="isThumbnailBroken = true"
-      />
-      <span v-else class="flex h-full w-full items-center justify-center text-2xl">🎬</span>
-      <span
-        class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-white"
+  <div class="flex items-center gap-1 bg-surface p-1">
+    <span
+      class="drag-handle shrink-0 cursor-grab touch-none px-1 py-2 text-lg leading-none text-ink-muted"
+      aria-hidden="true"
+    >
+      ⋮⋮
+    </span>
+    <RouterLink
+      :to="{ name: 'player', params: { videoId: video.id } }"
+      class="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border-subtle bg-surface-raised p-2 transition active:scale-[0.98] active:bg-surface-overlay"
+    >
+      <div
+        class="relative aspect-video w-28 shrink-0 overflow-hidden rounded-xl bg-surface-overlay"
       >
-        {{ formatDuration(video.durationMs) }}
-      </span>
-    </div>
-    <div class="min-w-0 flex-1 py-1">
-      <p class="truncate text-sm font-medium text-ink">{{ video.title }}</p>
-    </div>
-    <span class="pr-2 text-ink-muted transition group-active:translate-x-0.5">›</span>
-  </RouterLink>
+        <img
+          v-if="!isThumbnailBroken"
+          :src="thumbnailUrl(video.youtubeId)"
+          :alt="video.title"
+          loading="lazy"
+          class="h-full w-full object-cover"
+          @error="isThumbnailBroken = true"
+        />
+        <span v-else class="flex h-full w-full items-center justify-center text-2xl">🎬</span>
+        <span
+          class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-white"
+        >
+          {{ formatDuration(video.durationMs) }}
+        </span>
+      </div>
+      <div class="min-w-0 flex-1 py-1">
+        <p class="truncate text-sm font-medium text-ink">{{ video.title }}</p>
+      </div>
+      <span class="pr-2 text-ink-muted transition group-active:translate-x-0.5">›</span>
+    </RouterLink>
+  </div>
 </template>

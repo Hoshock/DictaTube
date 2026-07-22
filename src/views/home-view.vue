@@ -1,31 +1,30 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
+import { VueDraggable } from "vue-draggable-plus"
 
 import type { Playlist, Video } from "@shared/types"
 
-import VideoListItem from "../components/video-list-item.vue"
-import { demoPlaylists, demoVideos } from "../demo-data"
+import PlaylistPanel from "../components/playlist-panel.vue"
+import SwipeableItem from "../components/swipeable-item.vue"
+import { deleteDemoPlaylist, demoPlaylists, demoVideos, reorderDemoPlaylists } from "../demo-data"
 
-const videos = ref<Video[]>([])
+const UNFILED_PLAYLIST_ID = "unfiled"
+const UNFILED_PLAYLIST_NAME = "未分類"
+const DRAG_LONG_PRESS_DELAY_MS = 300
+
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === "true"
+
 const playlists = ref<Playlist[]>([])
+const videos = ref<Video[]>([])
 const isLoading = ref(true)
 const errorMessage = ref("")
-
-const SKELETON_ROWS = 3
+const searchQuery = ref("")
 
 const resolveErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message
   }
   return String(error)
-}
-
-const fetchVideos = async (): Promise<Video[]> => {
-  const response = await fetch("/api/videos")
-  if (!response.ok) {
-    throw new Error(`failed to load videos: ${response.status}`)
-  }
-  return (await response.json()) as Video[]
 }
 
 const fetchPlaylists = async (): Promise<Playlist[]> => {
@@ -36,52 +35,117 @@ const fetchPlaylists = async (): Promise<Playlist[]> => {
   return (await response.json()) as Playlist[]
 }
 
-const playlistSections = computed(() =>
-  playlists.value.map((playlist) => ({
-    playlist,
-    videos: videos.value.filter((video) => video.playlistIds.includes(playlist.id)),
-  })),
-)
-
-const unfiledVideos = computed(() => videos.value.filter((video) => video.playlistIds.length === 0))
+const fetchVideos = async (): Promise<Video[]> => {
+  const response = await fetch("/api/videos")
+  if (!response.ok) {
+    throw new Error(`failed to load videos: ${response.status}`)
+  }
+  return (await response.json()) as Video[]
+}
 
 onMounted(async () => {
-  // GitHub Pagesのdevプレビューにはバックエンドがないのでモックを使う。
-  if (import.meta.env.VITE_DEMO_MODE === "true") {
+  if (isDemoMode) {
+    playlists.value = [...demoPlaylists].sort((a, b) => a.position - b.position)
     videos.value = demoVideos
-    playlists.value = demoPlaylists
     isLoading.value = false
     return
   }
 
   try {
-    const [videosResult, playlistsResult] = await Promise.all([fetchVideos(), fetchPlaylists()])
-    videos.value = videosResult
+    const [playlistsResult, videosResult] = await Promise.all([fetchPlaylists(), fetchVideos()])
     playlists.value = playlistsResult
+    videos.value = videosResult
   } catch (error) {
     errorMessage.value = resolveErrorMessage(error)
   } finally {
     isLoading.value = false
   }
 })
+
+const videoCountByPlaylistId = computed(() => {
+  const counts = new Map<string, number>()
+  for (const video of videos.value) {
+    for (const playlistId of video.playlistIds) {
+      counts.set(playlistId, (counts.get(playlistId) ?? 0) + 1)
+    }
+  }
+  return counts
+})
+
+const unfiledVideoCount = computed(
+  () => videos.value.filter((video) => video.playlistIds.length === 0).length,
+)
+
+const normalizedQuery = computed(() => searchQuery.value.trim().toLowerCase())
+const isSearching = computed(() => normalizedQuery.value.length > 0)
+
+const filteredPlaylists = computed(() =>
+  playlists.value.filter((playlist) => playlist.name.toLowerCase().includes(normalizedQuery.value)),
+)
+
+const isUnfiledVisible = computed(() => UNFILED_PLAYLIST_NAME.includes(normalizedQuery.value))
+
+const reorderPlaylistsRemote = async (playlistIds: string[]): Promise<void> => {
+  await fetch("/api/playlists/reorder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ playlistIds }),
+  })
+}
+
+const onReorderEnd = async (): Promise<void> => {
+  const orderedIds = playlists.value.map((playlist) => playlist.id)
+  if (isDemoMode) {
+    reorderDemoPlaylists(orderedIds)
+    return
+  }
+  try {
+    await reorderPlaylistsRemote(orderedIds)
+  } catch (error) {
+    errorMessage.value = resolveErrorMessage(error)
+  }
+}
+
+const deletePlaylistRemote = async (playlistId: string): Promise<void> => {
+  const response = await fetch(`/api/playlists/${playlistId}`, { method: "DELETE" })
+  if (!response.ok) {
+    throw new Error("プレイリストの削除に失敗しました")
+  }
+}
+
+const onDeletePlaylist = async (playlistId: string): Promise<void> => {
+  playlists.value = playlists.value.filter((playlist) => playlist.id !== playlistId)
+  if (isDemoMode) {
+    deleteDemoPlaylist(playlistId)
+    return
+  }
+  try {
+    await deletePlaylistRemote(playlistId)
+  } catch (error) {
+    errorMessage.value = resolveErrorMessage(error)
+  }
+}
 </script>
 
 <template>
-  <main class="safe-area-inset relative mx-auto flex min-h-dvh max-w-md flex-col">
+  <main class="safe-area-inset relative mx-auto flex h-dvh max-w-md flex-col overflow-hidden">
     <header
-      class="sticky top-0 z-10 border-b border-border-subtle bg-surface/90 px-5 pb-4 pt-6 backdrop-blur"
+      class="flex shrink-0 flex-col gap-3 border-b border-border-subtle bg-surface/90 px-5 pb-4 pt-6"
     >
       <h1 class="text-2xl font-bold tracking-tight text-ink">Holo Shadowing</h1>
-      <p class="mt-1 text-sm text-ink-muted">字幕でリスニング練習</p>
+      <input
+        v-model="searchQuery"
+        type="search"
+        placeholder="プレイリストを検索"
+        class="w-full rounded-xl border border-border-subtle bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-muted"
+      />
     </header>
 
-    <div class="flex-1 px-4 pb-24 pt-4">
+    <div class="flex-1 overflow-y-auto px-4 pb-24 pt-4">
       <div v-if="isLoading" class="flex flex-col gap-3">
-        <div
-          v-for="row in SKELETON_ROWS"
-          :key="row"
-          class="h-24 animate-pulse rounded-2xl bg-surface-raised"
-        />
+        <div class="h-16 animate-pulse rounded-2xl bg-surface-raised" />
+        <div class="h-16 animate-pulse rounded-2xl bg-surface-raised" />
+        <div class="h-16 animate-pulse rounded-2xl bg-surface-raised" />
       </div>
 
       <p
@@ -91,35 +155,60 @@ onMounted(async () => {
         {{ errorMessage }}
       </p>
 
-      <div
-        v-else-if="videos.length === 0"
-        class="mt-14 flex flex-col items-center gap-2 text-center text-ink-muted"
-      >
-        <p class="text-4xl">🎬</p>
-        <p class="text-sm">動画がまだありません。右下の + からインポートできます。</p>
-      </div>
+      <div v-else class="flex flex-col gap-3">
+        <VueDraggable
+          v-if="!isSearching"
+          v-model="playlists"
+          handle=".drag-handle"
+          :delay="DRAG_LONG_PRESS_DELAY_MS"
+          :delay-on-touch-only="true"
+          :animation="150"
+          tag="div"
+          class="flex flex-col gap-3"
+          @end="onReorderEnd"
+        >
+          <SwipeableItem
+            v-for="playlist in playlists"
+            :key="playlist.id"
+            @delete="onDeletePlaylist(playlist.id)"
+          >
+            <PlaylistPanel
+              :playlist-id="playlist.id"
+              :name="playlist.name"
+              :video-count="videoCountByPlaylistId.get(playlist.id) ?? 0"
+            />
+          </SwipeableItem>
+        </VueDraggable>
 
-      <div v-else class="flex flex-col gap-6">
-        <section v-for="section in playlistSections" :key="section.playlist.id">
-          <h2 class="mb-2 text-sm font-semibold text-ink-muted">{{ section.playlist.name }}</h2>
-          <p v-if="section.videos.length === 0" class="text-sm text-ink-muted">
-            まだ動画がありません。
-          </p>
-          <ul v-else class="flex flex-col gap-3">
-            <li v-for="video in section.videos" :key="video.id">
-              <VideoListItem :video="video" />
-            </li>
-          </ul>
-        </section>
+        <template v-else>
+          <SwipeableItem
+            v-for="playlist in filteredPlaylists"
+            :key="playlist.id"
+            @delete="onDeletePlaylist(playlist.id)"
+          >
+            <PlaylistPanel
+              :playlist-id="playlist.id"
+              :name="playlist.name"
+              :video-count="videoCountByPlaylistId.get(playlist.id) ?? 0"
+              :show-handle="false"
+            />
+          </SwipeableItem>
+        </template>
 
-        <section v-if="unfiledVideos.length > 0">
-          <h2 class="mb-2 text-sm font-semibold text-ink-muted">未分類</h2>
-          <ul class="flex flex-col gap-3">
-            <li v-for="video in unfiledVideos" :key="video.id">
-              <VideoListItem :video="video" />
-            </li>
-          </ul>
-        </section>
+        <PlaylistPanel
+          v-if="isUnfiledVisible"
+          :playlist-id="UNFILED_PLAYLIST_ID"
+          :name="UNFILED_PLAYLIST_NAME"
+          :video-count="unfiledVideoCount"
+          :show-handle="false"
+        />
+
+        <p
+          v-if="playlists.length === 0 && unfiledVideoCount === 0"
+          class="mt-10 text-center text-sm text-ink-muted"
+        >
+          動画がまだありません。右下の + からインポートできます。
+        </p>
       </div>
     </div>
 

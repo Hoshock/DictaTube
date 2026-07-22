@@ -28,6 +28,7 @@ Cloudflare Workers (holo-shadowing.workers.dev)
 | データ     | Cloudflare D1                                  | GitHub 認証情報を持たない。[ADR-002](./adr/002-d1-data-store.md)                                                                                                                                       |
 | 動画再生   | YouTube IFrame Player API                      | チャンクループは seekTo + ポーリング                                                                                                                                                                   |
 | フロント   | Vue 3 + TypeScript + Vite Plus + pnpm          | `src/` は素のVite標準 (Childの入れ子`src/app/`とは事情が違う。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md))                                                                                  |
+| 並び替え   | vue-draggable-plus (SortableJSラッパー)        | 唯一のVue以外の実行時依存。スワイプ削除は依存追加せず自前実装 (`src/components/swipeable-item.vue`)                                                                                                    |
 
 すべて無料枠に収まる。
 
@@ -90,8 +91,9 @@ json3 形式は単語ごとのタイムスタンプ (tOffsetMs) を持つ。自�
 - あわせてUIを全面刷新(ダークテーマ、モバイルファースト、safe-area対応、ホーム画面のサムネイルカード)。サムネイル画像読み込み失敗時はプレースホルダーにフォールバックする
 - 進捗保存API(`POST /api/progress`)自体はscaffold段階から先行実装されているが、フロントからは呼んでいない(ディクテーション採点をロードマップから外したため、クリア判定基準がなくなった)。D1の`progress`テーブル・APIはそのまま残置 — 将来フェーズ2で別の完了基準を設ける可能性があるための保留であり、今すぐ削除するものではない
 - ステップ0(字幕取得スパイク)と、import本体(`/api/import`での字幕取得・チャンク化・D1保存)は未着手。Cloudflareにログインできる環境での作業が必要
-- ステップ6(プレイリスト表示 + インポート画面UI)はフロントエンドのみ実装済み。Home画面にプレイリストごとの動画一覧と右下の丸型+ボタンを追加し、+ボタンから遷移するインポート画面でURL入力→(デモでは疑似import)→追加先プレイリスト選択、の流れを一通り確認できる。D1の`playlists`/`playlist_videos`テーブルと`/api/playlists`一覧・作成・動画紐付けAPIも用意したが、実データでの動作確認はステップ0と同様に未実施
-- Player画面の操作系を全面刷新: 左上のチャンク数表示とドット型チャンクナビゲーションを廃止(チャンク数が多い動画で破綻するため)、CCボタンをヘッダーから下部コントロールに移動。下部は2段構成(1段目: prev/next、2段目: CC / 再生・停止トグル / repeat)で、CCとrepeatはOFF時は目立たない配色にして視認性を確保。再生ボタンは押すたびにチャンク先頭へ巻き戻さず、単純な再生・一時停止のトグルに変更(チャンク切り替え時のみ先頭にシークする)
+- ステップ6(プレイリスト表示 + インポート画面UI)はフロントエンドのみ実装済み。Home画面は各プレイリストを1枚のパネル(名前+動画数)として並べ、タップするとそのプレイリストの動画一覧画面(`/playlists/:playlistId`)に遷移する構成に変更(以前の「Homeに全動画をベタ表示」から変更)。「未分類」も同じ見た目の固定パネルとして扱い、削除・並び替えの対象からは外している。右下の丸型+ボタンから遷移するインポート画面はURL入力→(デモでは疑似import)→追加先プレイリスト選択、の流れのまま。D1の`playlists`/`playlist_videos`テーブルと`/api/playlists`一覧・作成・動画紐付けAPIも用意したが、実データでの動作確認はステップ0と同様に未実施
+- Home・プレイリスト詳細それぞれの一覧に、プレイリスト/動画それぞれの検索窓・並び替え(長押しドラッグ、`.drag-handle`列を`vue-draggable-plus`で監視)・削除(左スワイプで削除ボタンが出る、`src/components/swipeable-item.vue`)を追加。並び順は`position`列(値が小さいほど上位)で管理し、新規作成分は既存行に触れず先頭に来る(`worker/lib/ordering.ts`)。検索でフィルタ中は並び替えを無効化(絞り込み後の並びと全体のインデックスがずれるため)、削除はそのまま使える。動画の削除は「そのプレイリストから外す」ではなく「ライブラリから完全に削除」(`DELETE /api/videos/:id`、chunks/progress/playlist_videosへカスケード)。
+- Player画面の操作系を全面刷新: 左上のチャンク数表示とドット型チャンクナビゲーションを廃止(チャンク数が多い動画で破綻するため)、CCボタンをヘッダーから下部コントロールに移動。下部は2段構成(1段目: prev/next、2段目: CC / 再生・停止トグル / repeat)。CC・再生停止・repeatの3トグルは配色ルールを完全に統一(ON=ブランドカラーの縁取り+薄い背景+文字色、OFF=枠なし+ミュートグレー、共通のクラス三項演算子1つのみ)——以前はCCがブランド色、repeatが警告色、再生停止が塗りつぶし反転と別々の配色になっていたのを揃えた。字幕ボックスはCC ON/OFFで枠のサイズ・スタイルを一切変えず、中の文字だけを表示/非表示にする(余計な代替文言も出さない)。画面全体は`h-dvh overflow-hidden`+flexで組み、字幕ボックスだけが`flex-1 min-h-0`で残り高さを埋めるため、通常の長さのチャンクなら画面スクロールなしで全要素が収まる(ボックス自身の`overflow-y-auto`は異常に長いチャンク用の保険)。再生ボタンは押すたびにチャンク先頭へ巻き戻さず、単純な再生・一時停止のトグルに変更(チャンク切り替え時のみ先頭にシークする)
 - ディレクトリ構成をNuxt4化する案を検討したが、Childが実はNuxtを使っていない(AWS SAM/CloudFormationの静的サイトサンプル)ことが判明し撤回。代わりに素のVite標準の`src/`命名と、Cloudflareの現行推奨である`@cloudflare/vite-plugin`+Workersへの移行を実施 ([ADR-004](./adr/004-cloudflare-workers-vite-plugin.md))
 - `develop`ブランチを新設し、`main`は本番専用に整理 ([ADR-005](./adr/005-develop-main-branch-deploy-split.md))。`main`へのpushをトリガーに`deploy-production.yml`でCloudflare Workersへ自動デプロイする仕組みも追加したが、**まだ成功しない**: `CLOUDFLARE_API_TOKEN`をリポジトリのSecretsに登録する作業と、`wrangler.jsonc`のD1 `database_id`(現在プレースホルダの`REPLACE_WITH_D1_DATABASE_ID`)を実際のD1インスタンスのIDに置き換える作業が、どちらもオーナー自身のマシンでの`wrangler`ログインを前提とするため未完了
 

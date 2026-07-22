@@ -5,6 +5,7 @@ interface VideoRow {
   youtube_id: string
   title: string
   duration_ms: number
+  position: number
   created_at: string
 }
 
@@ -21,6 +22,7 @@ interface ChunkRow {
 }
 
 const NOT_FOUND_STATUS = 404
+const INVALID_BODY_STATUS = 400
 
 const toVideo = (row: VideoRow, playlistIds: string[]): Video => ({
   id: row.id,
@@ -28,6 +30,7 @@ const toVideo = (row: VideoRow, playlistIds: string[]): Video => ({
   title: row.title,
   durationMs: row.duration_ms,
   createdAt: row.created_at,
+  position: row.position,
   playlistIds,
 })
 
@@ -52,7 +55,7 @@ export const listVideos = async (db: D1Database): Promise<Response> => {
   const [{ results }, { results: playlistVideoResults }] = await Promise.all([
     db
       .prepare(
-        "SELECT id, youtube_id, title, duration_ms, created_at FROM videos ORDER BY created_at DESC",
+        "SELECT id, youtube_id, title, duration_ms, position, created_at FROM videos ORDER BY position ASC",
       )
       .all<VideoRow>(),
     db.prepare("SELECT playlist_id, video_id FROM playlist_videos").all<PlaylistVideoRow>(),
@@ -65,7 +68,9 @@ export const listVideos = async (db: D1Database): Promise<Response> => {
 export const getVideo = async (db: D1Database, videoId: string): Promise<Response> => {
   const [row, { results: playlistVideoResults }] = await Promise.all([
     db
-      .prepare("SELECT id, youtube_id, title, duration_ms, created_at FROM videos WHERE id = ?1")
+      .prepare(
+        "SELECT id, youtube_id, title, duration_ms, position, created_at FROM videos WHERE id = ?1",
+      )
       .bind(videoId)
       .first<VideoRow>(),
     db
@@ -95,4 +100,37 @@ export const getVideoChunks = async (db: D1Database, videoId: string): Promise<R
     .all<ChunkRow>()
 
   return Response.json(results.map((row) => toChunk(row)))
+}
+
+export const deleteVideo = async (db: D1Database, videoId: string): Promise<Response> => {
+  await db.prepare("DELETE FROM videos WHERE id = ?1").bind(videoId).run()
+  return Response.json({ ok: true })
+}
+
+interface ReorderVideosRequestBody {
+  videoIds: string[]
+}
+
+const isReorderVideosRequestBody = (value: unknown): value is ReorderVideosRequestBody => {
+  if (typeof value !== "object" || value === null) {
+    return false
+  }
+  const body = value as Record<string, unknown>
+  return Array.isArray(body.videoIds) && body.videoIds.every((id) => typeof id === "string")
+}
+
+// 未分類動画一覧のドラッグ並び替え。渡された順序どおりにposition (0..N-1) を振り直す。
+export const reorderVideos = async (db: D1Database, request: Request): Promise<Response> => {
+  const body: unknown = await request.json()
+  if (!isReorderVideosRequestBody(body)) {
+    return Response.json({ error: "invalid request body" }, { status: INVALID_BODY_STATUS })
+  }
+
+  await db.batch(
+    body.videoIds.map((videoId, index) =>
+      db.prepare("UPDATE videos SET position = ?1 WHERE id = ?2").bind(index, videoId),
+    ),
+  )
+
+  return Response.json({ ok: true })
 }
