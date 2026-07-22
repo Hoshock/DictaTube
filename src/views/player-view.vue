@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <header
-        class="flex shrink-0 items-center gap-3 border-b border-border-subtle bg-surface/90 px-3 py-3"
+        class="flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle bg-surface/90 px-4"
       >
         <RouterLink
           :to="{ name: 'home' }"

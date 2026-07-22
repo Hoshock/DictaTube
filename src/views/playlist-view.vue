@@ -18,6 +18,9 @@ import {
 const UNFILED_PLAYLIST_ID = "unfiled"
 const UNFILED_PLAYLIST_NAME = "未分類"
 const DRAG_LONG_PRESS_DELAY_MS = 300
+// スワイプ削除(SwipeableItemの activation threshold)より小さい値にして、
+// 横に動かした場合はSortable側が必ず先に諦めるようにする。
+const DRAG_TOUCH_START_THRESHOLD_PX = 5
 
 const { playlistId } = defineProps<{
   playlistId: string
@@ -31,6 +34,7 @@ const videos = ref<Video[]>([])
 const isLoading = ref(true)
 const errorMessage = ref("")
 const searchQuery = ref("")
+const isReordering = ref(false)
 
 const resolveErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
@@ -123,6 +127,7 @@ const reorderRemote = async (videoIds: string[]): Promise<void> => {
 }
 
 const onReorderEnd = async (): Promise<void> => {
+  isReordering.value = false
   const orderedIds = videos.value.map((video) => video.id)
   if (isDemoMode) {
     if (isUnfiled.value) {
@@ -163,24 +168,16 @@ const onDeleteVideo = async (videoId: string): Promise<void> => {
 <template>
   <main class="safe-area-inset mx-auto flex h-dvh max-w-md flex-col overflow-hidden">
     <header
-      class="flex shrink-0 flex-col gap-3 border-b border-border-subtle bg-surface/90 px-3 py-3"
+      class="flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle bg-surface/90 px-4"
     >
-      <div class="flex items-center gap-3">
-        <RouterLink
-          :to="{ name: 'home' }"
-          class="shrink-0 rounded-full p-1.5 text-ink-muted transition active:bg-surface-overlay"
-          aria-label="ホームに戻る"
-        >
-          ‹
-        </RouterLink>
-        <p class="min-w-0 flex-1 truncate text-sm font-medium text-ink">{{ playlistName }}</p>
-      </div>
-      <input
-        v-model="searchQuery"
-        type="search"
-        placeholder="動画を検索"
-        class="w-full rounded-xl border border-border-subtle bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-muted"
-      />
+      <RouterLink
+        :to="{ name: 'home' }"
+        class="shrink-0 rounded-full p-1.5 text-ink-muted transition active:bg-surface-overlay"
+        aria-label="ホームに戻る"
+      >
+        ‹
+      </RouterLink>
+      <p class="min-w-0 flex-1 truncate text-sm font-medium text-ink">{{ playlistName }}</p>
     </header>
 
     <div class="flex-1 overflow-y-auto px-4 pb-4 pt-3">
@@ -203,16 +200,16 @@ const onDeleteVideo = async (videoId: string): Promise<void> => {
       <VueDraggable
         v-else-if="!isSearching"
         v-model="videos"
-        handle=".drag-handle"
         :delay="DRAG_LONG_PRESS_DELAY_MS"
-        :delay-on-touch-only="true"
+        :touch-start-threshold="DRAG_TOUCH_START_THRESHOLD_PX"
         :animation="150"
         tag="ul"
         class="flex flex-col gap-3"
+        @start="isReordering = true"
         @end="onReorderEnd"
       >
         <li v-for="video in videos" :key="video.id">
-          <SwipeableItem @delete="onDeleteVideo(video.id)">
+          <SwipeableItem :disabled="isReordering" @delete="onDeleteVideo(video.id)">
             <VideoListItem :video="video" />
           </SwipeableItem>
         </li>
@@ -225,6 +222,15 @@ const onDeleteVideo = async (videoId: string): Promise<void> => {
           </SwipeableItem>
         </li>
       </ul>
+    </div>
+
+    <div class="safe-area-bottom shrink-0 border-t border-border-subtle bg-surface/95 px-4 pt-3">
+      <input
+        v-model="searchQuery"
+        type="search"
+        placeholder="動画を検索"
+        class="w-full rounded-xl border border-border-subtle bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-muted"
+      />
     </div>
   </main>
 </template>

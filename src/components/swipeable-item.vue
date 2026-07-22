@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref } from "vue"
 
+const { disabled = false } = defineProps<{
+  // 並び替えドラッグ中はSortable側にジェスチャーを完全に譲るためtrueにする。
+  disabled?: boolean
+}>()
+
 const emit = defineEmits<{
   delete: []
 }>()
@@ -10,7 +15,9 @@ const OPEN_THRESHOLD_RATIO = 0.5
 const OPEN_THRESHOLD_PX = REVEAL_WIDTH_PX * OPEN_THRESHOLD_RATIO
 // この距離を横に動かすまでは「スワイプ」と確定させない。
 // 確定前はポインタを一切奪わないので、ただのタップ(RouterLinkのクリック)はそのまま通る。
-const SWIPE_ACTIVATION_PX = 8
+// 並び替え用の長押しドラッグ(Sortable側のtouchStartThreshold)より少しだけ大きい値にして、
+// 「動かした」場合は必ずSortable側が先に諦めるようにしてある。
+const SWIPE_ACTIVATION_PX = 10
 
 const translateX = ref(0)
 const isDragging = ref(false)
@@ -23,12 +30,8 @@ let activePointerId: number | undefined
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max)
 
-// ドラッグハンドル(並び替え用)から始まったポインタは無視し、Sortableに完全に譲る。
-const startsOnDragHandle = (event: PointerEvent): boolean =>
-  (event.target as HTMLElement).closest(".drag-handle") !== null
-
 const onPointerDown = (event: PointerEvent): void => {
-  if (startsOnDragHandle(event)) {
+  if (disabled) {
     return
   }
   isTracking = true
@@ -39,7 +42,7 @@ const onPointerDown = (event: PointerEvent): void => {
 }
 
 const onPointerMove = (event: PointerEvent): void => {
-  if (!isTracking || event.pointerId !== activePointerId) {
+  if (disabled || !isTracking || event.pointerId !== activePointerId) {
     return
   }
   const dx = event.clientX - startClientX

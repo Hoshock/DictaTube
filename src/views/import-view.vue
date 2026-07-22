@@ -147,7 +147,7 @@ const confirmImport = async (): Promise<void> => {
 <template>
   <main class="safe-area-inset mx-auto flex min-h-dvh max-w-md flex-col">
     <header
-      class="sticky top-0 z-10 flex items-center gap-3 border-b border-border-subtle bg-surface/90 px-3 py-3 backdrop-blur"
+      class="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border-subtle bg-surface/90 px-4 backdrop-blur"
     >
       <RouterLink
         :to="{ name: 'home' }"

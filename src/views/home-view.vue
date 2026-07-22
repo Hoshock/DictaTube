@@ -11,6 +11,9 @@ import { deleteDemoPlaylist, demoPlaylists, demoVideos, reorderDemoPlaylists } f
 const UNFILED_PLAYLIST_ID = "unfiled"
 const UNFILED_PLAYLIST_NAME = "未分類"
 const DRAG_LONG_PRESS_DELAY_MS = 300
+// スワイプ削除(SwipeableItemの activation threshold)より小さい値にして、
+// 横に動かした場合はSortable側が必ず先に諦めるようにする。
+const DRAG_TOUCH_START_THRESHOLD_PX = 5
 
 const isDemoMode = import.meta.env.VITE_DEMO_MODE === "true"
 
@@ -19,6 +22,7 @@ const videos = ref<Video[]>([])
 const isLoading = ref(true)
 const errorMessage = ref("")
 const searchQuery = ref("")
+const isReordering = ref(false)
 
 const resolveErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
@@ -94,6 +98,7 @@ const reorderPlaylistsRemote = async (playlistIds: string[]): Promise<void> => {
 }
 
 const onReorderEnd = async (): Promise<void> => {
+  isReordering.value = false
   const orderedIds = playlists.value.map((playlist) => playlist.id)
   if (isDemoMode) {
     reorderDemoPlaylists(orderedIds)
@@ -130,18 +135,12 @@ const onDeletePlaylist = async (playlistId: string): Promise<void> => {
 <template>
   <main class="safe-area-inset relative mx-auto flex h-dvh max-w-md flex-col overflow-hidden">
     <header
-      class="flex shrink-0 flex-col gap-3 border-b border-border-subtle bg-surface/90 px-5 pb-4 pt-6"
+      class="flex h-14 shrink-0 items-center border-b border-border-subtle bg-surface/90 px-4"
     >
-      <h1 class="text-2xl font-bold tracking-tight text-ink">Holo Shadowing</h1>
-      <input
-        v-model="searchQuery"
-        type="search"
-        placeholder="プレイリストを検索"
-        class="w-full rounded-xl border border-border-subtle bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-muted"
-      />
+      <h1 class="text-xl font-bold tracking-tight text-ink">Holo Shadowing</h1>
     </header>
 
-    <div class="flex-1 overflow-y-auto px-4 pb-24 pt-4">
+    <div class="flex-1 overflow-y-auto px-4 pb-28 pt-4">
       <div v-if="isLoading" class="flex flex-col gap-3">
         <div class="h-16 animate-pulse rounded-2xl bg-surface-raised" />
         <div class="h-16 animate-pulse rounded-2xl bg-surface-raised" />
@@ -156,20 +155,28 @@ const onDeletePlaylist = async (playlistId: string): Promise<void> => {
       </p>
 
       <div v-else class="flex flex-col gap-3">
+        <PlaylistPanel
+          v-if="isUnfiledVisible"
+          :playlist-id="UNFILED_PLAYLIST_ID"
+          :name="UNFILED_PLAYLIST_NAME"
+          :video-count="unfiledVideoCount"
+        />
+
         <VueDraggable
           v-if="!isSearching"
           v-model="playlists"
-          handle=".drag-handle"
           :delay="DRAG_LONG_PRESS_DELAY_MS"
-          :delay-on-touch-only="true"
+          :touch-start-threshold="DRAG_TOUCH_START_THRESHOLD_PX"
           :animation="150"
           tag="div"
           class="flex flex-col gap-3"
+          @start="isReordering = true"
           @end="onReorderEnd"
         >
           <SwipeableItem
             v-for="playlist in playlists"
             :key="playlist.id"
+            :disabled="isReordering"
             @delete="onDeletePlaylist(playlist.id)"
           >
             <PlaylistPanel
@@ -190,18 +197,9 @@ const onDeletePlaylist = async (playlistId: string): Promise<void> => {
               :playlist-id="playlist.id"
               :name="playlist.name"
               :video-count="videoCountByPlaylistId.get(playlist.id) ?? 0"
-              :show-handle="false"
             />
           </SwipeableItem>
         </template>
-
-        <PlaylistPanel
-          v-if="isUnfiledVisible"
-          :playlist-id="UNFILED_PLAYLIST_ID"
-          :name="UNFILED_PLAYLIST_NAME"
-          :video-count="unfiledVideoCount"
-          :show-handle="false"
-        />
 
         <p
           v-if="playlists.length === 0 && unfiledVideoCount === 0"
@@ -212,9 +210,18 @@ const onDeletePlaylist = async (playlistId: string): Promise<void> => {
       </div>
     </div>
 
+    <div class="safe-area-bottom shrink-0 border-t border-border-subtle bg-surface/95 px-4 pt-3">
+      <input
+        v-model="searchQuery"
+        type="search"
+        placeholder="プレイリストを検索"
+        class="w-full rounded-xl border border-border-subtle bg-surface-raised px-3 py-2 text-sm text-ink placeholder:text-ink-muted"
+      />
+    </div>
+
     <RouterLink
       :to="{ name: 'import' }"
-      class="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500 text-3xl font-light text-white shadow-lg shadow-black/30 transition active:scale-95 active:bg-brand-600"
+      class="fixed bottom-24 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500 text-3xl font-light text-white shadow-lg shadow-black/30 transition active:scale-95 active:bg-brand-600"
       aria-label="動画をインポート"
     >
       +
