@@ -26,6 +26,15 @@ export default defineConfig({
   },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     options: { typeAware: true, typeCheck: true },
+    overrides: [
+      {
+        // vite-plusバンドルの`vite-plus/test`はdefineConfig読み込み時にクラッシュするため、
+        // このファイルだけは素のvitest/vitest-configを使う (CLAUDE.md Gotchas参照)。
+        files: ["vitest.config.ts", "shared/**/*.test.ts"],
+        rules: { "vite-plus/prefer-vite-plus-imports": "off" },
+      },
+    ],
   },
 })
