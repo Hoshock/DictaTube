@@ -1,11 +1,10 @@
 import { getVideo, getVideoChunks, listVideos } from "./routes/videos"
-import { getVideoProgress, saveProgress } from "./routes/progress"
+import { saveProgress } from "./routes/progress"
 
 const VIDEOS_LIST_PATH = "/api/videos"
 const PROGRESS_PATH = "/api/progress"
 const VIDEO_ID_PATTERN = /^\/api\/videos\/(?<videoId>[^/]+)$/u
 const VIDEO_CHUNKS_PATTERN = /^\/api\/videos\/(?<videoId>[^/]+)\/chunks$/u
-const VIDEO_PROGRESS_PATTERN = /^\/api\/videos\/(?<videoId>[^/]+)\/progress$/u
 
 const GET_METHOD = "GET"
 const POST_METHOD = "POST"
@@ -25,11 +24,6 @@ const routeVideoDetail = (
   const chunksVideoId = extractVideoId(VIDEO_CHUNKS_PATTERN.exec(pathname))
   if (chunksVideoId && method === GET_METHOD) {
     return getVideoChunks(env.DB, chunksVideoId)
-  }
-
-  const progressVideoId = extractVideoId(VIDEO_PROGRESS_PATTERN.exec(pathname))
-  if (progressVideoId && method === GET_METHOD) {
-    return getVideoProgress(env.DB, progressVideoId)
   }
 
   const videoId = extractVideoId(VIDEO_ID_PATTERN.exec(pathname))

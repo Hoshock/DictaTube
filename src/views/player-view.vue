@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 
-import type { Chunk, Progress, Video } from "@shared/types"
-import { diffWords, isPerfectMatch, type WordDiffToken } from "@shared/dictation"
+import type { Chunk, Video } from "@shared/types"
 
-import { demoChunksByVideoId, demoProgressByVideoId, demoVideos } from "../demo-data"
+import { demoChunksByVideoId, demoVideos } from "../demo-data"
 import { loadYouTubeIframeApi } from "../youtube-iframe-api"
 
 const { videoId } = defineProps<{
@@ -20,14 +19,12 @@ const YT_FLAG_DISABLED = 0
 
 const video = ref<Video | undefined>()
 const chunks = ref<Chunk[]>([])
-const progressByChunk = ref<Record<number, Progress>>({})
 const isLoading = ref(true)
 const errorMessage = ref("")
 const currentChunkIndex = ref(FIRST_CHUNK_INDEX)
 const isPlayerReady = ref(false)
-const typedAnswer = ref("")
-const diffTokens = ref<WordDiffToken[]>([])
-const showAnswer = ref(false)
+const isSubtitleVisible = ref(true)
+const isRepeating = ref(false)
 
 let player: YT.Player | undefined
 let pollIntervalId: number | undefined
@@ -37,16 +34,10 @@ const hasPreviousChunk = computed(() => currentChunkIndex.value > FIRST_CHUNK_IN
 const hasNextChunk = computed(
   () => currentChunkIndex.value < chunks.value.length - CHUNK_INDEX_STEP,
 )
-const hasChecked = computed(() => diffTokens.value.length > 0)
-const isPerfect = computed(() => isPerfectMatch(diffTokens.value))
-const clearedCount = computed(
-  () => Object.values(progressByChunk.value).filter((entry) => entry.cleared).length,
-)
 
 interface VideoData {
   video: Video
   chunks: Chunk[]
-  progress: Progress[]
 }
 
 const resolveErrorMessage = (error: unknown): string => {
@@ -61,26 +52,20 @@ const loadDemoData = (id: string): VideoData => {
   if (!demoVideo) {
     throw new Error("動画が見つかりません")
   }
-  return {
-    video: demoVideo,
-    chunks: demoChunksByVideoId[id] ?? [],
-    progress: demoProgressByVideoId[id] ?? [],
-  }
+  return { video: demoVideo, chunks: demoChunksByVideoId[id] ?? [] }
 }
 
 const fetchRemoteData = async (id: string): Promise<VideoData> => {
-  const [videoResponse, chunksResponse, progressResponse] = await Promise.all([
+  const [videoResponse, chunksResponse] = await Promise.all([
     fetch(`/api/videos/${id}`),
     fetch(`/api/videos/${id}/chunks`),
-    fetch(`/api/videos/${id}/progress`),
   ])
-  if (!videoResponse.ok || !chunksResponse.ok || !progressResponse.ok) {
+  if (!videoResponse.ok || !chunksResponse.ok) {
     throw new Error("動画の読み込みに失敗しました")
   }
   const loadedVideo = (await videoResponse.json()) as Video
   const loadedChunks = (await chunksResponse.json()) as Chunk[]
-  const loadedProgress = (await progressResponse.json()) as Progress[]
-  return { video: loadedVideo, chunks: loadedChunks, progress: loadedProgress }
+  return { video: loadedVideo, chunks: loadedChunks }
 }
 
 // GitHub Pagesのdevプレビューにはバックエンドがないのでモックを使う。
@@ -96,9 +81,6 @@ const loadData = async (id: string): Promise<void> => {
     const data = await resolveVideoData(id)
     video.value = data.video
     chunks.value = data.chunks
-    progressByChunk.value = Object.fromEntries(
-      data.progress.map((entry) => [entry.chunkIndex, entry]),
-    )
   } catch (error) {
     errorMessage.value = resolveErrorMessage(error)
   } finally {
@@ -129,6 +111,7 @@ const stopPolling = (): void => {
   }
 }
 
+// リピートONの間はチャンクの終端に着いたら先頭に戻して流し続ける。
 const startPolling = (): void => {
   stopPolling()
   pollIntervalId = globalThis.setInterval(() => {
@@ -137,10 +120,15 @@ const startPolling = (): void => {
       return
     }
     const currentMs = player.getCurrentTime() * MS_PER_SECOND
-    if (currentMs >= chunk.endMs) {
-      player.pauseVideo()
-      stopPolling()
+    if (currentMs < chunk.endMs) {
+      return
     }
+    if (isRepeating.value) {
+      player.seekTo(chunk.startMs / MS_PER_SECOND, true)
+      return
+    }
+    player.pauseVideo()
+    stopPolling()
   }, CHUNK_LOOP_POLL_INTERVAL_MS)
 }
 
@@ -156,10 +144,20 @@ const playCurrentChunk = (): void => {
   startPolling()
 }
 
-const resetAnswerState = (): void => {
-  typedAnswer.value = ""
-  diffTokens.value = []
-  showAnswer.value = false
+const toggleRepeat = (): void => {
+  isRepeating.value = !isRepeating.value
+  if (isRepeating.value) {
+    playCurrentChunk()
+    return
+  }
+  stopPolling()
+  if (player) {
+    player.pauseVideo()
+  }
+}
+
+const toggleSubtitle = (): void => {
+  isSubtitleVisible.value = !isSubtitleVisible.value
 }
 
 const goToChunk = (index: number): void => {
@@ -171,59 +169,7 @@ const goToChunk = (index: number): void => {
     player.pauseVideo()
   }
   currentChunkIndex.value = index
-  resetAnswerState()
-}
-
-const persistProgress = async (chunkIndex: number, cleared: boolean): Promise<void> => {
-  if (import.meta.env.VITE_DEMO_MODE === "true" || !video.value) {
-    return
-  }
-  try {
-    await fetch("/api/progress", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ videoId: video.value.id, chunkIndex, cleared }),
-    })
-  } catch {
-    // バックエンド未接続でも書き取り自体は続けられるようにし、保存失敗は無視する。
-  }
-}
-
-const ATTEMPT_STEP = 1
-const FIRST_ATTEMPT = 1
-
-const checkAnswer = (): void => {
-  const chunk = currentChunk.value
-  if (!chunk || !video.value) {
-    return
-  }
-  diffTokens.value = diffWords(chunk.text, typedAnswer.value)
-  const cleared = isPerfectMatch(diffTokens.value)
-  const previousAttempts =
-    progressByChunk.value[chunk.index]?.attempts ?? FIRST_ATTEMPT - ATTEMPT_STEP
-
-  progressByChunk.value = {
-    ...progressByChunk.value,
-    [chunk.index]: {
-      videoId: video.value.id,
-      chunkIndex: chunk.index,
-      cleared,
-      attempts: previousAttempts + ATTEMPT_STEP,
-      updatedAt: "",
-    },
-  }
-
-  void persistProgress(chunk.index, cleared)
-}
-
-const retryAnswer = (): void => {
-  typedAnswer.value = ""
-  diffTokens.value = []
-  showAnswer.value = false
-}
-
-const toggleShowAnswer = (): void => {
-  showAnswer.value = !showAnswer.value
+  isRepeating.value = false
 }
 
 onMounted(async () => {
@@ -260,29 +206,38 @@ onBeforeUnmount(() => {
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-medium text-ink">{{ video?.title }}</p>
           <p class="text-xs text-ink-muted">
-            {{ currentChunkIndex + CHUNK_INDEX_STEP }} / {{ chunks.length }} ・ クリア済み
-            {{ clearedCount }}
+            チャンク {{ currentChunkIndex + CHUNK_INDEX_STEP }} / {{ chunks.length }}
           </p>
         </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition"
+          :class="
+            isSubtitleVisible
+              ? 'border-brand-500 bg-brand-500/10 text-brand-400'
+              : 'border-border-subtle text-ink-muted'
+          "
+          @click="toggleSubtitle"
+        >
+          CC {{ isSubtitleVisible ? "ON" : "OFF" }}
+        </button>
       </header>
 
-      <div v-if="chunks.length > 0" class="flex gap-1.5 overflow-x-auto px-3 py-2">
+      <nav
+        v-if="chunks.length > 0"
+        aria-label="チャンク一覧"
+        class="flex gap-1.5 overflow-x-auto px-3 py-2"
+      >
         <button
           v-for="chunk in chunks"
           :key="chunk.index"
           type="button"
           class="h-2 w-5 shrink-0 rounded-full transition"
-          :class="[
-            chunk.index === currentChunkIndex
-              ? 'bg-brand-400'
-              : progressByChunk[chunk.index]?.cleared
-                ? 'bg-success-500/70'
-                : 'bg-surface-overlay',
-          ]"
+          :class="chunk.index === currentChunkIndex ? 'bg-brand-400' : 'bg-surface-overlay'"
           :aria-label="`チャンク${chunk.index + CHUNK_INDEX_STEP}へ移動`"
           @click="goToChunk(chunk.index)"
         />
-      </div>
+      </nav>
 
       <div class="flex-1 overflow-y-auto px-4 pb-4">
         <div id="youtube-player" class="aspect-video w-full overflow-hidden rounded-2xl bg-black" />
@@ -292,47 +247,17 @@ onBeforeUnmount(() => {
         </p>
 
         <template v-if="currentChunk">
-          <div class="mt-4 rounded-2xl border border-border-subtle bg-surface-raised p-4">
-            <p v-if="showAnswer" class="text-lg leading-relaxed text-ink">
-              {{ currentChunk.text }}
-            </p>
-
-            <div
-              v-else-if="hasChecked"
-              class="flex flex-wrap gap-x-1.5 gap-y-1 text-lg leading-relaxed"
-            >
-              <span
-                v-for="(token, index) in diffTokens"
-                :key="index"
-                :class="{
-                  'text-ink': token.status === 'correct',
-                  'text-danger-500 line-through decoration-2': token.status === 'missing',
-                  'text-warning-500 underline decoration-2 underline-offset-4':
-                    token.status === 'extra',
-                }"
-                >{{ token.word }}</span
-              >
-            </div>
-
-            <textarea
-              v-else
-              v-model="typedAnswer"
-              rows="3"
-              autocapitalize="off"
-              autocomplete="off"
-              autocorrect="off"
-              spellcheck="false"
-              placeholder="聞こえた通りに入力..."
-              class="w-full resize-none rounded-xl border border-border-subtle bg-surface px-3 py-2 text-base text-ink placeholder-ink-muted focus:border-brand-500 focus:outline-none"
-            />
-
-            <p
-              v-if="hasChecked && !showAnswer"
-              class="mt-3 text-sm font-medium"
-              :class="isPerfect ? 'text-success-500' : 'text-warning-500'"
-            >
-              {{ isPerfect ? "🎉 正解！" : "惜しい、もう一度挑戦してみましょう" }}
-            </p>
+          <div
+            v-if="isSubtitleVisible"
+            class="mt-4 rounded-2xl border border-border-subtle bg-surface-raised p-4 text-lg leading-relaxed text-ink"
+          >
+            {{ currentChunk.text }}
+          </div>
+          <div
+            v-else
+            class="mt-4 flex items-center justify-center rounded-2xl border border-dashed border-border-subtle p-4 text-sm text-ink-muted"
+          >
+            字幕は非表示です(CC ONで表示)
           </div>
         </template>
         <p v-else class="mt-4 text-ink-muted">この動画にはチャンクがまだありません。</p>
@@ -348,15 +273,7 @@ onBeforeUnmount(() => {
             :disabled="!hasPreviousChunk"
             @click="goToChunk(currentChunkIndex - 1)"
           >
-            ‹ 前へ
-          </button>
-          <button
-            type="button"
-            class="flex-[1.4] rounded-xl bg-brand-500 py-2 text-sm font-semibold text-white transition active:bg-brand-600 disabled:opacity-30"
-            :disabled="!isPlayerReady || !currentChunk"
-            @click="playCurrentChunk"
-          >
-            ▶ 再生
+            ‹ 前のチャンク
           </button>
           <button
             type="button"
@@ -364,34 +281,28 @@ onBeforeUnmount(() => {
             :disabled="!hasNextChunk"
             @click="goToChunk(currentChunkIndex + 1)"
           >
-            次へ ›
+            次のチャンク ›
           </button>
         </div>
-
-        <div v-if="currentChunk" class="flex gap-2">
+        <div class="flex gap-2">
           <button
-            v-if="!hasChecked && !showAnswer"
             type="button"
-            class="flex-1 rounded-xl bg-surface-overlay py-2 text-sm font-medium text-ink disabled:opacity-30"
-            :disabled="typedAnswer.trim().length === 0"
-            @click="checkAnswer"
+            class="flex-1 rounded-xl bg-brand-500 py-2 text-sm font-semibold text-white transition active:bg-brand-600 disabled:opacity-30"
+            :disabled="!isPlayerReady || !currentChunk"
+            @click="playCurrentChunk"
           >
-            答え合わせ
-          </button>
-          <button
-            v-else-if="!showAnswer"
-            type="button"
-            class="flex-1 rounded-xl bg-surface-overlay py-2 text-sm font-medium text-ink"
-            @click="retryAnswer"
-          >
-            もう一度
+            ▶ 再生(1回)
           </button>
           <button
             type="button"
-            class="flex-1 rounded-xl border border-border-subtle py-2 text-sm text-ink-muted"
-            @click="toggleShowAnswer"
+            class="flex-1 rounded-xl py-2 text-sm font-semibold transition disabled:opacity-30"
+            :class="
+              isRepeating ? 'bg-warning-500 text-black' : 'border border-border-subtle text-ink'
+            "
+            :disabled="!isPlayerReady || !currentChunk"
+            @click="toggleRepeat"
           >
-            {{ showAnswer ? "入力に戻る" : "答えを見る" }}
+            🔁 リピート{{ isRepeating ? "中" : "" }}
           </button>
         </div>
       </div>

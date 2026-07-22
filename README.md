@@ -1,6 +1,6 @@
 # DictaTube
 
-YouTube の自動字幕でディクテーション学習をするための個人用Webアプリ。設計の詳細は [docs/design.md](./docs/design.md)、個別の意思決定は [ADR](./docs/adr/index.md) を参照。
+YouTube の自動字幕でリスニング練習をするための個人用Webアプリ。設計の詳細は [docs/design.md](./docs/design.md)、個別の意思決定は [ADR](./docs/adr/index.md) を参照。
 
 ## 開発
 

@@ -1,6 +1,6 @@
 # DictaTube 設計メモ
 
-YouTube の自動字幕を使ってリスニング・ディクテーション学習をするための個人用 Web アプリ。動画を数秒〜十数秒のチャンクに区切って繰り返し再生し、書き取りと進捗管理を行う。利用者は Hoshock のみ。スマホからの利用が主。
+YouTube の自動字幕を使ってリスニング練習をするための個人用 Web アプリ。動画を数秒〜十数秒のチャンクに区切り、字幕表示のON/OFF切り替えとリピート再生で繰り返し聞く。利用者は Hoshock のみ。スマホからの利用が主。ディクテーション(タイピングでの正誤判定)・進捗採点はロードマップから除外し、シンプルなリスニング練習に絞っている。
 
 2026-07-22 時点の技術調査と設計の記録。個別の意思決定の経緯は [ADR](./adr/index.md) を参照。
 
@@ -73,16 +73,19 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 | 2   | Home 一覧 + /api/videos                                                                    |
 | 3   | Player + チャンクループ (playsinline、ユーザー操作起点の再生開始)                          |
 | 4   | import (スパイク結果の経路 + 貼り付けフォールバック)                                       |
-| 5   | ディクテーション (単語 diff 判定) + 進捗保存                                               |
+| 5   | 字幕ON/OFF切り替え + チャンクリピート再生                                                  |
 | 6   | フェーズ 2: シャドーイング採点 (transformers.js + whisper 系 WASM、完全クライアントサイド) |
+
+ディクテーション(タイピングでの正誤判定)と、それに紐づく進捗保存はロードマップから除外した。理由は本セッションでの利用者フィードバック — 入力させる操作自体が不要、進捗の自動判定基準もなくなるため。字幕表示のON/OFF切り替えとチャンクリピート再生というシンプルなリスニング練習に絞る。
 
 ## セットアップ状況
 
 - wrangler 4.112.0 導入済み。brew の cloudflare-wrangler を使う (npx 経由は社内証明書の検証で失敗する)
 - wrangler login は未実施
 - Zero Trust の GitHub IdP 接続とWorkerのカスタムドメイン設定も未実施。scaffold の段階で設定する
-- ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)・ステップ3(Player + チャンクループ、YouTube IFrame Player API)・ステップ5(ディクテーション単語diff判定 + 進捗保存)はコードレベルで完了。単語diffはLCSで位置ずれ(単語の抜け・言い足し)に対応(`shared/dictation.ts`、単体テストあり)。進捗取得API(`GET /api/videos/:id/progress`)も追加し、保存済みAPIと合わせてPlayer画面のクリア状況表示・再開に利用。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Access・YouTube再生に対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過、UIの見た目とルーティングはGitHub Pagesのdevプレビューで確認済み)
-- あわせてUIを全面刷新(ダークテーマ、モバイルファースト、safe-area対応、チャンク進捗ドット、ホーム画面のサムネイルカード)。サムネイル画像読み込み失敗時はプレースホルダーにフォールバックする
+- ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)・ステップ3(Player + チャンクループ、YouTube IFrame Player API)・ステップ5(字幕ON/OFF切り替え + チャンクリピート再生)はコードレベルで完了。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Access・YouTube再生に対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過、UIの見た目とルーティングはGitHub Pagesのdevプレビューで確認済み)
+- あわせてUIを全面刷新(ダークテーマ、モバイルファースト、safe-area対応、ホーム画面のサムネイルカード)。サムネイル画像読み込み失敗時はプレースホルダーにフォールバックする
+- 進捗保存API(`POST /api/progress`)自体はscaffold段階から先行実装されているが、フロントからは呼んでいない(ディクテーション採点をロードマップから外したため、クリア判定基準がなくなった)。D1の`progress`テーブル・APIはそのまま残置 — 将来フェーズ2で別の完了基準を設ける可能性があるための保留であり、今すぐ削除するものではない
 - ステップ0(字幕取得スパイク)とステップ4(import)は未着手。Cloudflareにログインできる環境での作業が必要
 - ディレクトリ構成をNuxt4化する案を検討したが、Childが実はNuxtを使っていない(AWS SAM/CloudFormationの静的サイトサンプル)ことが判明し撤回。代わりに素のVite標準の`src/`命名と、Cloudflareの現行推奨である`@cloudflare/vite-plugin`+Workersへの移行を実施 ([ADR-004](./adr/004-cloudflare-workers-vite-plugin.md))
 - `develop`ブランチを新設し、`main`は本番専用に整理 ([ADR-005](./adr/005-develop-main-branch-deploy-split.md))。`main`へのpushをトリガーに`deploy-production.yml`でCloudflare Workersへ自動デプロイする仕組みも追加したが、**まだ成功しない**: `CLOUDFLARE_API_TOKEN`をリポジトリのSecretsに登録する作業と、`wrangler.jsonc`のD1 `database_id`(現在プレースホルダの`REPLACE_WITH_D1_DATABASE_ID`)を実際のD1インスタンスのIDに置き換える作業が、どちらもオーナー自身のマシンでの`wrangler`ログインを前提とするため未完了

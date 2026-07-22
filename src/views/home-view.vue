@@ -76,7 +76,7 @@ onMounted(async () => {
       class="sticky top-0 z-10 border-b border-border-subtle bg-surface/90 px-5 pb-4 pt-6 backdrop-blur"
     >
       <h1 class="text-2xl font-bold tracking-tight text-ink">DictaTube</h1>
-      <p class="mt-1 text-sm text-ink-muted">字幕でディクテーション学習</p>
+      <p class="mt-1 text-sm text-ink-muted">字幕でリスニング練習</p>
     </header>
 
     <div class="flex-1 px-4 pb-8 pt-4">
