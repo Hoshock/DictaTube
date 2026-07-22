@@ -18,15 +18,17 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: astral-sh/setup-uv@v6
+      - uses: denoland/setup-deno@v2
 
-      - name: List available subtitles
+      - name: Start bgutil POT provider
         run: |
-          uvx yt-dlp --skip-download --list-subs \
-            "https://youtu.be/${{ inputs.video_id }}" 2>&1 | head -30
+          docker run -d --name bgutil -p 4416:4416 brainicism/bgutil-ytdlp-pot-provider
+          sleep 8
+          curl -sf http://127.0.0.1:4416/ping && echo "provider up"
 
       - name: Fetch auto captions (json3)
         run: |
-          uvx yt-dlp --skip-download --write-auto-subs \
+          uvx --with bgutil-ytdlp-pot-provider yt-dlp -v --skip-download --write-auto-subs \
             --sub-langs "${{ inputs.lang }}" --sub-format json3 \
             -o "captions" "https://youtu.be/${{ inputs.video_id }}"
           ls -la captions.*
