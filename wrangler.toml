@@ -1,0 +1,9 @@
+name = "dictatube"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-07-22"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dictatube"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "db"

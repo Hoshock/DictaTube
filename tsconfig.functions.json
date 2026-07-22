@@ -1,0 +1,16 @@
+// TSConfig for Cloudflare Pages Functions (Workers runtime, not the browser).
+{
+  "extends": "@tsconfig/node24/tsconfig.json",
+  "include": ["functions/**/*", "shared/**/*"],
+  "exclude": ["shared/**/*.test.ts"],
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "noEmit": true,
+    "paths": {
+      "@shared/*": ["./shared/*"]
+    },
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.functions.tsbuildinfo"
+  }
+}
