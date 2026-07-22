@@ -6,6 +6,18 @@ CREATE TABLE videos (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE playlists (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE playlist_videos (
+  playlist_id TEXT NOT NULL REFERENCES playlists (id) ON DELETE CASCADE,
+  video_id TEXT NOT NULL REFERENCES videos (id) ON DELETE CASCADE,
+  PRIMARY KEY (playlist_id, video_id)
+);
+
 CREATE TABLE chunks (
   video_id TEXT NOT NULL REFERENCES videos (id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,

@@ -1,4 +1,4 @@
-# DictaTube
+# Holo Shadowing
 
 Personal YouTube listening-practice app (single user). See [README.md](./README.md) for what it does and [docs/design.md](./docs/design.md) / [docs/adr/](./docs/adr/index.md) for the design record.
 
@@ -10,7 +10,7 @@ pnpm test         # vitest — shared/chunker.ts only today
 pnpm type-check    # vue-tsc for src/, tsc for worker/ (two separate tsconfigs, one command)
 pnpm lint          # vp lint . --fix — close to vite-plus's own defaults, see Gotchas
 pnpm format        # vp fmt .
-pnpm build         # vite build; add VITE_DEMO_MODE=true VITE_BASE_PATH=/DictaTube/ to reproduce the GitHub Pages build locally
+pnpm build         # vite build; add VITE_DEMO_MODE=true VITE_BASE_PATH=/DictaTube/ to reproduce the GitHub Pages build locally (base path still uses the repo name, unchanged for now)
 pnpm dev           # vite dev server
 pnpm preview       # serves the last build through workerd — see Gotchas re: VITE_BASE_PATH
 pnpm cf-typegen    # regenerate worker-configuration.d.ts after editing wrangler.jsonc — also runs on postinstall
@@ -21,14 +21,15 @@ pnpm cf-typegen    # regenerate worker-configuration.d.ts after editing wrangler
 ```
 .
 ├── src/                     # SPA (Vue 3 + TS), plain Vite convention — NOT Child's nested src/app/ (see ADR-004)
-│   ├── views/               # kebab-case filenames — see Code Style
-│   ├── demo-data.ts         # mock Video/Chunk data, used only when VITE_DEMO_MODE=true
+│   ├── views/               # kebab-case filenames — see Code Style; home-view/player-view/import-view
+│   ├── components/          # small presentational components shared across views (e.g. video-list-item.vue)
+│   ├── demo-data.ts         # mock Video/Playlist/Chunk data + fake import/playlist helpers, used only when VITE_DEMO_MODE=true
 │   └── youtube-iframe-api.ts  # loads the YouTube IFrame Player <script> once, globally
 ├── worker/                  # single Cloudflare Worker, bundled by @cloudflare/vite-plugin (ADR-004)
 │   ├── index.ts             # fetch(request, env, ctx) — routes by hand, then falls back to env.ASSETS.fetch()
-│   └── routes/              # one file per resource, not per HTTP method (unlike the old Pages Functions layout)
+│   └── routes/              # one file per resource, not per HTTP method (unlike the old Pages Functions layout); videos/progress/playlists — no import.ts yet, see Key Files
 ├── shared/                  # chunker.ts + types.ts, imported by both src/ and worker/
-├── db/schema.sql             # D1 schema (videos/chunks/progress); applied via `wrangler d1 migrations` (migrations_dir in wrangler.jsonc), not yet run against a real D1 instance
+├── db/schema.sql             # D1 schema (videos/chunks/progress/playlists/playlist_videos); applied via `wrangler d1 migrations` (migrations_dir in wrangler.jsonc), not yet run against a real D1 instance
 ├── docs/design.md            # architecture + status, in Japanese
 ├── docs/adr/                 # one ADR per architectural decision, in English
 ├── wrangler.jsonc            # Worker name, D1 binding, assets binding — main points at worker/index.ts
@@ -37,15 +38,17 @@ pnpm cf-typegen    # regenerate worker-configuration.d.ts after editing wrangler
 └── .github/workflows/deploy-production.yml  # production deploy to Cloudflare Workers, triggers on push to main (ADR-005)
 ```
 
-`vite build` emits two things: `dist/client/` (static frontend) and `dist/dictatube/` (bundled Worker + generated `wrangler.json`). Don't assume `dist/` itself is the deployable output — it's always one of those two subdirectories.
+`vite build` emits two things: `dist/client/` (static frontend) and `dist/holo_shadowing/` (bundled Worker + generated `wrangler.json` — `@cloudflare/vite-plugin` sanitizes the worker name's `-` to `_` for the build environment name, so this doesn't match `wrangler.jsonc`'s `name` literally). Don't assume `dist/` itself is the deployable output — it's always one of those two subdirectories.
 
 ## Key Files
 
 - Change how captions are split into chunks: `shared/chunker.ts` (`parseJson3Captions`, `chunkWords`) — shared by the SPA and the Worker, keep it that way rather than duplicating logic.
-- Toggle subtitle visibility or chunk-repeat behavior: `src/views/player-view.vue` (`isSubtitleVisible`, `isRepeating`) — repeat re-seeks to the chunk start when playback crosses `chunk.endMs`, driven by the same poll loop as the one-shot chunk-loop playback.
-- Add an API route: add a handler function to `worker/routes/*.ts` (plain `(db, ...) => Promise<Response>`, no framework-specific handler type) and wire it into `worker/index.ts`'s `routeApi`/`routeVideoDetail` routing — there's no file-based routing here, unlike the old Pages Functions setup.
+- Toggle subtitle visibility, chunk-repeat, or play/pause: `src/views/player-view.vue` (`isSubtitleVisible`, `isRepeating`, `isPlaying`) — repeat re-seeks to the chunk start when playback crosses `chunk.endMs`, driven by the same poll loop as `togglePlayPause`'s plain play/pause. All controls live in the sticky bottom bar (two rows: prev/next, then CC / play-pause / repeat) — nothing in the header is interactive besides the back link, and there's no per-chunk status indicator (removed on purpose, see `docs/design.md` セットアップ状況 — a video can have far too many chunks to represent as a dot per chunk). Seeking to a chunk's start only happens in `goToChunk` (prev/next); `togglePlayPause` never seeks, so resuming after pause continues from wherever playback stopped.
+- Add an API route: add a handler function to `worker/routes/*.ts` (plain `(db, ...) => Promise<Response>`, no framework-specific handler type) and wire it into `worker/index.ts`'s `routeApi`/`routeVideoDetail`/`routePlaylists` routing — there's no file-based routing here, unlike the old Pages Functions setup.
 - D1 access inside the Worker is just `env.DB` (passed down as a plain `D1Database` argument to route functions) — query with `db/schema.sql`'s column names (snake_case in SQL, mapped to camelCase `shared/types.ts` shapes by small `toX` mapper functions in each route file). The `Env` type itself is global ambient, generated from `wrangler.jsonc` by `wrangler types` — there's no `worker/types.ts` to hand-edit; add a binding to `wrangler.jsonc` and run `pnpm cf-typegen`.
-- Chunk-loop playback: `src/views/player-view.vue` + `src/youtube-iframe-api.ts`. Playback must only ever start from a user tap (`playCurrentChunk`), never automatically — mobile browsers block autoplay otherwise.
+- Chunk-loop playback: `src/views/player-view.vue` + `src/youtube-iframe-api.ts`. Playback must only ever start from a user tap, never automatically — mobile browsers block autoplay otherwise.
+- Playlists: `shared/types.ts`'s `Video.playlistIds` + `Playlist`, `worker/routes/playlists.ts` (list/create playlist, add video to playlist), `db/schema.sql`'s `playlists`/`playlist_videos`. `src/views/home-view.vue` groups videos by playlist (plus an "未分類" section for videos with no playlist).
+- Import UI: `src/views/import-view.vue` (URL input → playlist selection), reached via the floating `+` button on `home-view.vue`. There is no `worker/routes/import.ts` yet — real caption fetching is still the unresolved step-0 spike (`docs/design.md`); in demo mode `src/demo-data.ts`'s `runDemoImport` fakes it by extracting the video ID from the URL, in real mode the view calls `/api/import` and surfaces a "not ready" message if that 404s.
 
 ## Code Style
 

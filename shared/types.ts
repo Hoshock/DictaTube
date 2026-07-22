@@ -4,6 +4,13 @@ export interface Video {
   title: string
   durationMs: number
   createdAt: string
+  playlistIds: string[]
+}
+
+export interface Playlist {
+  id: string
+  name: string
+  createdAt: string
 }
 
 export interface Word {

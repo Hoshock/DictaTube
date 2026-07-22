@@ -25,6 +25,7 @@ const currentChunkIndex = ref(FIRST_CHUNK_INDEX)
 const isPlayerReady = ref(false)
 const isSubtitleVisible = ref(true)
 const isRepeating = ref(false)
+const isPlaying = ref(false)
 
 let player: YT.Player | undefined
 let pollIntervalId: number | undefined
@@ -100,6 +101,10 @@ const setupPlayer = async (youtubeId: string): Promise<void> => {
     events: {
       onReady: (): void => {
         isPlayerReady.value = true
+        const chunk = currentChunk.value
+        if (player && chunk) {
+          player.seekTo(chunk.startMs / MS_PER_SECOND, true)
+        }
       },
     },
   })
@@ -112,6 +117,7 @@ const stopPolling = (): void => {
 }
 
 // リピートONの間はチャンクの終端に着いたら先頭に戻して流し続ける。
+// OFFなら通常のシンプルな再生・停止として、終端で一時停止するだけにする。
 const startPolling = (): void => {
   stopPolling()
   pollIntervalId = globalThis.setInterval(() => {
@@ -129,47 +135,50 @@ const startPolling = (): void => {
     }
     player.pauseVideo()
     stopPolling()
+    isPlaying.value = false
   }, CHUNK_LOOP_POLL_INTERVAL_MS)
 }
 
-// チャンクの再生は必ずユーザー操作(タップ)から始める。
-// モバイルブラウザは操作起点なしの再生開始を許可しないため (docs/design.md ステップ3)。
-const playCurrentChunk = (): void => {
-  const chunk = currentChunk.value
-  if (!player || !chunk) {
+// シンプルな再生・停止トグル。再生時は現在の位置からそのまま再開し、
+// チャンク先頭への巻き戻しはgoToChunkでのチャンク切り替え時のみ行う。
+const togglePlayPause = (): void => {
+  if (!player || !currentChunk.value) {
     return
   }
-  player.seekTo(chunk.startMs / MS_PER_SECOND, true)
+  if (isPlaying.value) {
+    player.pauseVideo()
+    stopPolling()
+    isPlaying.value = false
+    return
+  }
   player.playVideo()
+  isPlaying.value = true
   startPolling()
 }
 
 const toggleRepeat = (): void => {
   isRepeating.value = !isRepeating.value
-  if (isRepeating.value) {
-    playCurrentChunk()
-    return
-  }
-  stopPolling()
-  if (player) {
-    player.pauseVideo()
-  }
 }
 
 const toggleSubtitle = (): void => {
   isSubtitleVisible.value = !isSubtitleVisible.value
 }
 
+// チャンク切り替えは必ずユーザー操作(タップ)から始める。
+// モバイルブラウザは操作起点なしの再生開始を許可しないため (docs/design.md ステップ3)。
 const goToChunk = (index: number): void => {
   if (index < FIRST_CHUNK_INDEX || index >= chunks.value.length) {
     return
   }
   stopPolling()
-  if (player) {
-    player.pauseVideo()
-  }
-  currentChunkIndex.value = index
+  isPlaying.value = false
   isRepeating.value = false
+  currentChunkIndex.value = index
+  const chunk = chunks.value[index]
+  if (player && chunk) {
+    player.pauseVideo()
+    player.seekTo(chunk.startMs / MS_PER_SECOND, true)
+  }
 }
 
 onMounted(async () => {
@@ -203,43 +212,10 @@ onBeforeUnmount(() => {
         >
           ‹
         </RouterLink>
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-medium text-ink">{{ video?.title }}</p>
-          <p class="text-xs text-ink-muted">
-            チャンク {{ currentChunkIndex + CHUNK_INDEX_STEP }} / {{ chunks.length }}
-          </p>
-        </div>
-        <button
-          type="button"
-          class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition"
-          :class="
-            isSubtitleVisible
-              ? 'border-brand-500 bg-brand-500/10 text-brand-400'
-              : 'border-border-subtle text-ink-muted'
-          "
-          @click="toggleSubtitle"
-        >
-          CC {{ isSubtitleVisible ? "ON" : "OFF" }}
-        </button>
+        <p class="min-w-0 flex-1 truncate text-sm font-medium text-ink">{{ video?.title }}</p>
       </header>
 
-      <nav
-        v-if="chunks.length > 0"
-        aria-label="チャンク一覧"
-        class="flex gap-1.5 overflow-x-auto px-3 py-2"
-      >
-        <button
-          v-for="chunk in chunks"
-          :key="chunk.index"
-          type="button"
-          class="h-2 w-5 shrink-0 rounded-full transition"
-          :class="chunk.index === currentChunkIndex ? 'bg-brand-400' : 'bg-surface-overlay'"
-          :aria-label="`チャンク${chunk.index + CHUNK_INDEX_STEP}へ移動`"
-          @click="goToChunk(chunk.index)"
-        />
-      </nav>
-
-      <div class="flex-1 overflow-y-auto px-4 pb-4">
+      <div class="flex-1 overflow-y-auto px-4 pb-4 pt-3">
         <div id="youtube-player" class="aspect-video w-full overflow-hidden rounded-2xl bg-black" />
 
         <p v-if="!isPlayerReady" class="mt-2 text-center text-xs text-ink-muted">
@@ -257,7 +233,7 @@ onBeforeUnmount(() => {
             v-else
             class="mt-4 flex items-center justify-center rounded-2xl border border-dashed border-border-subtle p-4 text-sm text-ink-muted"
           >
-            字幕は非表示です(CC ONで表示)
+            字幕は非表示です(CCで表示)
           </div>
         </template>
         <p v-else class="mt-4 text-ink-muted">この動画にはチャンクがまだありません。</p>
@@ -273,7 +249,7 @@ onBeforeUnmount(() => {
             :disabled="!hasPreviousChunk"
             @click="goToChunk(currentChunkIndex - 1)"
           >
-            ‹ 前のチャンク
+            ‹ prev
           </button>
           <button
             type="button"
@@ -281,28 +257,42 @@ onBeforeUnmount(() => {
             :disabled="!hasNextChunk"
             @click="goToChunk(currentChunkIndex + 1)"
           >
-            次のチャンク ›
+            next ›
           </button>
         </div>
         <div class="flex gap-2">
           <button
             type="button"
-            class="flex-1 rounded-xl bg-brand-500 py-2 text-sm font-semibold text-white transition active:bg-brand-600 disabled:opacity-30"
-            :disabled="!isPlayerReady || !currentChunk"
-            @click="playCurrentChunk"
+            class="flex-1 rounded-xl border py-2 text-sm font-semibold transition disabled:opacity-30"
+            :class="
+              isSubtitleVisible
+                ? 'border-brand-500 bg-brand-500/10 text-brand-400'
+                : 'border-transparent text-ink-muted'
+            "
+            @click="toggleSubtitle"
           >
-            ▶ 再生(1回)
+            CC
           </button>
           <button
             type="button"
-            class="flex-1 rounded-xl py-2 text-sm font-semibold transition disabled:opacity-30"
-            :class="
-              isRepeating ? 'bg-warning-500 text-black' : 'border border-border-subtle text-ink'
-            "
+            class="flex-1 rounded-xl border border-transparent py-2 text-sm font-semibold transition disabled:opacity-30"
+            :class="isPlaying ? 'bg-ink text-surface' : 'bg-brand-500 text-white'"
             :disabled="!isPlayerReady || !currentChunk"
+            @click="togglePlayPause"
+          >
+            {{ isPlaying ? "pause" : "play" }}
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded-xl border py-2 text-sm font-semibold transition disabled:opacity-30"
+            :class="
+              isRepeating
+                ? 'border-warning-500 bg-warning-500/10 text-warning-500'
+                : 'border-transparent text-ink-muted'
+            "
             @click="toggleRepeat"
           >
-            🔁 リピート{{ isRepeating ? "中" : "" }}
+            repeat
           </button>
         </div>
       </div>

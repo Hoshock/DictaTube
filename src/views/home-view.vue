@@ -1,19 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { computed, onMounted, ref } from "vue"
 
-import type { Video } from "@shared/types"
+import type { Playlist, Video } from "@shared/types"
 
-import { demoVideos } from "../demo-data"
+import VideoListItem from "../components/video-list-item.vue"
+import { demoPlaylists, demoVideos } from "../demo-data"
 
 const videos = ref<Video[]>([])
+const playlists = ref<Playlist[]>([])
 const isLoading = ref(true)
 const errorMessage = ref("")
-const brokenThumbnailIds = ref(new Set<string>())
 
-const MS_PER_SECOND = 1000
-const SECONDS_PER_MINUTE = 60
-const MINUTES_PER_HOUR = 60
-const DURATION_PAD_LENGTH = 2
 const SKELETON_ROWS = 3
 
 const resolveErrorMessage = (error: unknown): string => {
@@ -31,37 +28,36 @@ const fetchVideos = async (): Promise<Video[]> => {
   return (await response.json()) as Video[]
 }
 
-const padTimePart = (value: number): string => String(value).padStart(DURATION_PAD_LENGTH, "0")
-
-const formatDuration = (durationMs: number): string => {
-  const totalSeconds = Math.floor(durationMs / MS_PER_SECOND)
-  const hours = Math.floor(totalSeconds / (SECONDS_PER_MINUTE * MINUTES_PER_HOUR))
-  const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR
-  const seconds = totalSeconds % SECONDS_PER_MINUTE
-
-  if (hours > 0) {
-    return `${hours}:${padTimePart(minutes)}:${padTimePart(seconds)}`
+const fetchPlaylists = async (): Promise<Playlist[]> => {
+  const response = await fetch("/api/playlists")
+  if (!response.ok) {
+    throw new Error(`failed to load playlists: ${response.status}`)
   }
-  return `${minutes}:${padTimePart(seconds)}`
+  return (await response.json()) as Playlist[]
 }
 
-const thumbnailUrl = (youtubeId: string): string =>
-  `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`
+const playlistSections = computed(() =>
+  playlists.value.map((playlist) => ({
+    playlist,
+    videos: videos.value.filter((video) => video.playlistIds.includes(playlist.id)),
+  })),
+)
 
-const markThumbnailBroken = (videoId: string): void => {
-  brokenThumbnailIds.value = new Set(brokenThumbnailIds.value).add(videoId)
-}
+const unfiledVideos = computed(() => videos.value.filter((video) => video.playlistIds.length === 0))
 
 onMounted(async () => {
   // GitHub Pagesのdevプレビューにはバックエンドがないのでモックを使う。
   if (import.meta.env.VITE_DEMO_MODE === "true") {
     videos.value = demoVideos
+    playlists.value = demoPlaylists
     isLoading.value = false
     return
   }
 
   try {
-    videos.value = await fetchVideos()
+    const [videosResult, playlistsResult] = await Promise.all([fetchVideos(), fetchPlaylists()])
+    videos.value = videosResult
+    playlists.value = playlistsResult
   } catch (error) {
     errorMessage.value = resolveErrorMessage(error)
   } finally {
@@ -71,15 +67,15 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main class="safe-area-inset mx-auto flex min-h-dvh max-w-md flex-col">
+  <main class="safe-area-inset relative mx-auto flex min-h-dvh max-w-md flex-col">
     <header
       class="sticky top-0 z-10 border-b border-border-subtle bg-surface/90 px-5 pb-4 pt-6 backdrop-blur"
     >
-      <h1 class="text-2xl font-bold tracking-tight text-ink">DictaTube</h1>
+      <h1 class="text-2xl font-bold tracking-tight text-ink">Holo Shadowing</h1>
       <p class="mt-1 text-sm text-ink-muted">字幕でリスニング練習</p>
     </header>
 
-    <div class="flex-1 px-4 pb-8 pt-4">
+    <div class="flex-1 px-4 pb-24 pt-4">
       <div v-if="isLoading" class="flex flex-col gap-3">
         <div
           v-for="row in SKELETON_ROWS"
@@ -100,40 +96,39 @@ onMounted(async () => {
         class="mt-14 flex flex-col items-center gap-2 text-center text-ink-muted"
       >
         <p class="text-4xl">🎬</p>
-        <p class="text-sm">動画がまだありません。</p>
+        <p class="text-sm">動画がまだありません。右下の + からインポートできます。</p>
       </div>
 
-      <ul v-else class="flex flex-col gap-3">
-        <li v-for="video in videos" :key="video.id">
-          <RouterLink
-            :to="{ name: 'player', params: { videoId: video.id } }"
-            class="group flex items-center gap-3 rounded-2xl border border-border-subtle bg-surface-raised p-2 transition active:scale-[0.98] active:bg-surface-overlay"
-          >
-            <div
-              class="relative aspect-video w-28 shrink-0 overflow-hidden rounded-xl bg-surface-overlay"
-            >
-              <img
-                v-if="!brokenThumbnailIds.has(video.id)"
-                :src="thumbnailUrl(video.youtubeId)"
-                :alt="video.title"
-                loading="lazy"
-                class="h-full w-full object-cover"
-                @error="markThumbnailBroken(video.id)"
-              />
-              <span v-else class="flex h-full w-full items-center justify-center text-2xl">🎬</span>
-              <span
-                class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-white"
-              >
-                {{ formatDuration(video.durationMs) }}
-              </span>
-            </div>
-            <div class="min-w-0 flex-1 py-1">
-              <p class="truncate text-sm font-medium text-ink">{{ video.title }}</p>
-            </div>
-            <span class="pr-2 text-ink-muted transition group-active:translate-x-0.5">›</span>
-          </RouterLink>
-        </li>
-      </ul>
+      <div v-else class="flex flex-col gap-6">
+        <section v-for="section in playlistSections" :key="section.playlist.id">
+          <h2 class="mb-2 text-sm font-semibold text-ink-muted">{{ section.playlist.name }}</h2>
+          <p v-if="section.videos.length === 0" class="text-sm text-ink-muted">
+            まだ動画がありません。
+          </p>
+          <ul v-else class="flex flex-col gap-3">
+            <li v-for="video in section.videos" :key="video.id">
+              <VideoListItem :video="video" />
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="unfiledVideos.length > 0">
+          <h2 class="mb-2 text-sm font-semibold text-ink-muted">未分類</h2>
+          <ul class="flex flex-col gap-3">
+            <li v-for="video in unfiledVideos" :key="video.id">
+              <VideoListItem :video="video" />
+            </li>
+          </ul>
+        </section>
+      </div>
     </div>
+
+    <RouterLink
+      :to="{ name: 'import' }"
+      class="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-brand-500 text-3xl font-light text-white shadow-lg shadow-black/30 transition active:scale-95 active:bg-brand-600"
+      aria-label="動画をインポート"
+    >
+      +
+    </RouterLink>
   </main>
 </template>

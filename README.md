@@ -1,4 +1,4 @@
-# DictaTube
+# Holo Shadowing
 
 YouTube の自動字幕でリスニング練習をするための個人用Webアプリ。設計の詳細は [docs/design.md](./docs/design.md)、個別の意思決定は [ADR](./docs/adr/index.md) を参照。
 
@@ -12,7 +12,7 @@ pnpm test         # shared/chunker.ts のユニットテスト
 pnpm type-check    # SPA (src/) + Cloudflare Worker (worker/)
 pnpm lint          # oxlint (vite-plus経由)
 pnpm format        # oxfmt (vite-plus経由)
-pnpm build         # 本番ビルド (dist/client: 静的配信, dist/dictatube: Worker)
+pnpm build         # 本番ビルド (dist/client: 静的配信, dist/holo_shadowing: Worker)
 ```
 
 ## デプロイ先

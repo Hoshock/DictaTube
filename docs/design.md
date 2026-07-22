@@ -1,4 +1,4 @@
-# DictaTube 設計メモ
+# Holo Shadowing 設計メモ
 
 YouTube の自動字幕を使ってリスニング練習をするための個人用 Web アプリ。動画を数秒〜十数秒のチャンクに区切り、字幕表示のON/OFF切り替えとリピート再生で繰り返し聞く。利用者は Hoshock のみ。スマホからの利用が主。ディクテーション(タイピングでの正誤判定)・進捗採点はロードマップから除外し、シンプルなリスニング練習に絞っている。
 
@@ -10,10 +10,10 @@ YouTube の自動字幕を使ってリスニング練習をするための個人
 [スマホ / PC ブラウザ]
     │ GitHub アカウントでログイン (Cloudflare Access が Hoshock のみ許可)
     ▼
-Cloudflare Workers (dictatube.workers.dev)
+Cloudflare Workers (holo-shadowing.workers.dev)
     ├─ 静的配信: Vue 3 + TypeScript + Vite Plus + Tailwind 4 (dist/client)
     └─ Worker (worker/index.ts, /api/*)
-         ├─ D1: videos / chunks / progress
+         ├─ D1: videos / chunks / progress / playlists / playlist_videos
          └─ YouTube 字幕取得 (経路はスパイクで確定)
     ▲
     │ mainへのpushで自動デプロイ (deploy-production.yml)
@@ -57,12 +57,14 @@ json3 形式は単語ごとのタイムスタンプ (tOffsetMs) を持つ。自�
 
 ## import の設計
 
-Workers から YouTube に届くかのスパイク結果で確定する。
+字幕取得の実処理は Workers から YouTube に届くかのスパイク結果で確定する (`/api/import` は未実装)。
 
 - 通る場合: /api/import が字幕取得、チャンク化、D1 保存まで行う。スマホだけで完結
 - 通らない場合: トランスクリプト貼り付け import (ブラウザ内でパース) を主経路にし、Mac 常駐のキューデーモンを補助に置く
 
 チャンク化ロジックは chunker.ts の 1 実装に集約し、SPA と Worker で共有する。
+
+インポート画面のUI (URL入力 → プレイリスト選択) はステップ0の結果を待たずに先行実装済み (`src/views/import-view.vue`)。デモモードでは URL から動画IDだけ取り出したダミー動画で一連の流れを確認できる。本番では `/api/import` 呼び出しが失敗した場合にエラーメッセージを表示するのみで、実際の字幕取得は上記スパイクの完了後に実装する。
 
 ## 実装ステップ
 
@@ -74,7 +76,8 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 | 3   | Player + チャンクループ (playsinline、ユーザー操作起点の再生開始)                          |
 | 4   | import (スパイク結果の経路 + 貼り付けフォールバック)                                       |
 | 5   | 字幕ON/OFF切り替え + チャンクリピート再生                                                  |
-| 6   | フェーズ 2: シャドーイング採点 (transformers.js + whisper 系 WASM、完全クライアントサイド) |
+| 6   | プレイリスト (Home表示、/api/playlists) + インポート画面のUI (URL入力 → プレイリスト選択)  |
+| 7   | フェーズ 2: シャドーイング採点 (transformers.js + whisper 系 WASM、完全クライアントサイド) |
 
 ディクテーション(タイピングでの正誤判定)と、それに紐づく進捗保存はロードマップから除外した。理由は本セッションでの利用者フィードバック — 入力させる操作自体が不要、進捗の自動判定基準もなくなるため。字幕表示のON/OFF切り替えとチャンクリピート再生というシンプルなリスニング練習に絞る。
 
@@ -86,7 +89,9 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 - ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)・ステップ3(Player + チャンクループ、YouTube IFrame Player API)・ステップ5(字幕ON/OFF切り替え + チャンクリピート再生)はコードレベルで完了。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Access・YouTube再生に対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過、UIの見た目とルーティングはGitHub Pagesのdevプレビューで確認済み)
 - あわせてUIを全面刷新(ダークテーマ、モバイルファースト、safe-area対応、ホーム画面のサムネイルカード)。サムネイル画像読み込み失敗時はプレースホルダーにフォールバックする
 - 進捗保存API(`POST /api/progress`)自体はscaffold段階から先行実装されているが、フロントからは呼んでいない(ディクテーション採点をロードマップから外したため、クリア判定基準がなくなった)。D1の`progress`テーブル・APIはそのまま残置 — 将来フェーズ2で別の完了基準を設ける可能性があるための保留であり、今すぐ削除するものではない
-- ステップ0(字幕取得スパイク)とステップ4(import)は未着手。Cloudflareにログインできる環境での作業が必要
+- ステップ0(字幕取得スパイク)と、import本体(`/api/import`での字幕取得・チャンク化・D1保存)は未着手。Cloudflareにログインできる環境での作業が必要
+- ステップ6(プレイリスト表示 + インポート画面UI)はフロントエンドのみ実装済み。Home画面にプレイリストごとの動画一覧と右下の丸型+ボタンを追加し、+ボタンから遷移するインポート画面でURL入力→(デモでは疑似import)→追加先プレイリスト選択、の流れを一通り確認できる。D1の`playlists`/`playlist_videos`テーブルと`/api/playlists`一覧・作成・動画紐付けAPIも用意したが、実データでの動作確認はステップ0と同様に未実施
+- Player画面の操作系を全面刷新: 左上のチャンク数表示とドット型チャンクナビゲーションを廃止(チャンク数が多い動画で破綻するため)、CCボタンをヘッダーから下部コントロールに移動。下部は2段構成(1段目: prev/next、2段目: CC / 再生・停止トグル / repeat)で、CCとrepeatはOFF時は目立たない配色にして視認性を確保。再生ボタンは押すたびにチャンク先頭へ巻き戻さず、単純な再生・一時停止のトグルに変更(チャンク切り替え時のみ先頭にシークする)
 - ディレクトリ構成をNuxt4化する案を検討したが、Childが実はNuxtを使っていない(AWS SAM/CloudFormationの静的サイトサンプル)ことが判明し撤回。代わりに素のVite標準の`src/`命名と、Cloudflareの現行推奨である`@cloudflare/vite-plugin`+Workersへの移行を実施 ([ADR-004](./adr/004-cloudflare-workers-vite-plugin.md))
 - `develop`ブランチを新設し、`main`は本番専用に整理 ([ADR-005](./adr/005-develop-main-branch-deploy-split.md))。`main`へのpushをトリガーに`deploy-production.yml`でCloudflare Workersへ自動デプロイする仕組みも追加したが、**まだ成功しない**: `CLOUDFLARE_API_TOKEN`をリポジトリのSecretsに登録する作業と、`wrangler.jsonc`のD1 `database_id`(現在プレースホルダの`REPLACE_WITH_D1_DATABASE_ID`)を実際のD1インスタンスのIDに置き換える作業が、どちらもオーナー自身のマシンでの`wrangler`ログインを前提とするため未完了
 

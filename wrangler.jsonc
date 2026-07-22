@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "dictatube",
+  "name": "holo-shadowing",
   "compatibility_date": "2026-07-22",
   "main": "./worker/index.ts",
   "assets": {
@@ -10,7 +10,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "dictatube",
+      "database_name": "holo-shadowing",
       "database_id": "REPLACE_WITH_D1_DATABASE_ID",
       "migrations_dir": "db",
     },

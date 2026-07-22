@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router"
 
 import type * as HomeViewModule from "../views/home-view.vue"
+import type * as ImportViewModule from "../views/import-view.vue"
 import type * as PlayerViewModule from "../views/player-view.vue"
 
 export const router = createRouter({
@@ -10,6 +11,11 @@ export const router = createRouter({
       path: "/",
       name: "home",
       component: (): Promise<typeof HomeViewModule> => import("../views/home-view.vue"),
+    },
+    {
+      path: "/import",
+      name: "import",
+      component: (): Promise<typeof ImportViewModule> => import("../views/import-view.vue"),
     },
     {
       path: "/videos/:videoId",
