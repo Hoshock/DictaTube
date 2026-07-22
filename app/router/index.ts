@@ -1,17 +1,20 @@
 import { createRouter, createWebHistory } from "vue-router"
 
+import type * as HomeViewModule from "../views/home-view.vue"
+import type * as PlayerViewModule from "../views/player-view.vue"
+
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: "/",
       name: "home",
-      component: () => import("../views/HomeView.vue"),
+      component: (): Promise<typeof HomeViewModule> => import("../views/home-view.vue"),
     },
     {
       path: "/videos/:videoId",
       name: "player",
-      component: () => import("../views/PlayerView.vue"),
+      component: (): Promise<typeof PlayerViewModule> => import("../views/player-view.vue"),
       props: true,
     },
   ],

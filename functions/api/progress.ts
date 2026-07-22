@@ -1,12 +1,15 @@
 import type { Env } from "../types"
 
+const CLEARED_VALUE = 1
+const NOT_CLEARED_VALUE = 0
+
 interface ProgressRequestBody {
   videoId: string
   chunkIndex: number
   cleared: boolean
 }
 
-function isProgressRequestBody(value: unknown): value is ProgressRequestBody {
+const isProgressRequestBody = (value: unknown): value is ProgressRequestBody => {
   if (typeof value !== "object" || value === null) {
     return false
   }
@@ -16,6 +19,13 @@ function isProgressRequestBody(value: unknown): value is ProgressRequestBody {
     typeof body.chunkIndex === "number" &&
     typeof body.cleared === "boolean"
   )
+}
+
+const toClearedValue = (cleared: boolean): number => {
+  if (cleared) {
+    return CLEARED_VALUE
+  }
+  return NOT_CLEARED_VALUE
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -33,7 +43,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
        attempts = attempts + 1,
        updated_at = datetime('now')`,
   )
-    .bind(body.videoId, body.chunkIndex, body.cleared ? 1 : 0)
+    .bind(body.videoId, body.chunkIndex, toClearedValue(body.cleared))
     .run()
 
   return Response.json({ ok: true })

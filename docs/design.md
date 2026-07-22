@@ -80,12 +80,9 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 - wrangler 4.112.0 導入済み。brew の cloudflare-wrangler を使う (npx 経由は社内証明書の検証で失敗する)
 - wrangler login は未実施
 - Zero Trust の GitHub IdP 接続と Pages プロジェクト作成も未実施。scaffold の段階で設定する
-- ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)はコードレベルで完了。progress保存APIも先行実装済み。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Accessに対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過)
-- ステップ3(Player + チャンクループ)は画面の骨格のみで、IFrame Player APIの実装はこれから
+- ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)・ステップ3(Player + チャンクループ、YouTube IFrame Player API)はコードレベルで完了。progress保存APIも先行実装済み。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Access・YouTube再生に対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過、UIの見た目とルーティングはGitHub Pagesのdevプレビューで確認済み)
 - ステップ0(字幕取得スパイク)とステップ4(import)は未着手。Cloudflareにログインできる環境での作業が必要
 
 ## 開発時の見た目確認 (GitHub Pages)
 
-Cloudflareにログインできないサンドボックス環境からでも見た目を確認できるよう、GitHub ActionsでGitHub Pagesにdevプレビューをデプロイする ([ADR-003](./adr/003-github-pages-dev-preview.md))。バックエンドを持たないため `VITE_DEMO_MODE=true` ビルドでは `/api/*` を呼ばずモックデータ (`app/demoData.ts`) を表示する。本番の判断基準にはならない (UIの見た目確認専用)。
-
-- リポジトリの Settings → Pages → Source を「GitHub Actions」にする1回限りの手動設定が必要 (未実施)
+Cloudflareにログインできないサンドボックス環境からでも見た目を確認できるよう、GitHub ActionsでGitHub Pagesにdevプレビューをデプロイする ([ADR-003](./adr/003-github-pages-dev-preview.md))。バックエンドを持たないため `VITE_DEMO_MODE=true` ビルドでは `/api/*` を呼ばずモックデータ (`app/demo-data.ts`) を表示する。本番の判断基準にはならない (UIの見た目確認専用)。手動設定は不要 — `actions/configure-pages` が初回実行時にPagesサイト自体を自動作成する。

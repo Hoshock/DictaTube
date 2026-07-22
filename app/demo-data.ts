@@ -25,11 +25,11 @@ export const demoVideos: Video[] = [
 export const demoChunksByVideoId: Record<string, Chunk[]> = {
   "demo-1": [
     { index: 0, startMs: 0, endMs: 8200, text: "hello and welcome to this video" },
-    { index: 1, startMs: 8200, endMs: 16900, text: "today we are going to talk about" },
-    { index: 2, startMs: 16900, endMs: 24100, text: "listening and dictation practice" },
+    { index: 1, startMs: 8200, endMs: 16_900, text: "today we are going to talk about" },
+    { index: 2, startMs: 16_900, endMs: 24_100, text: "listening and dictation practice" },
   ],
   "demo-2": [
     { index: 0, startMs: 0, endMs: 7800, text: "never gonna give you up" },
-    { index: 1, startMs: 7800, endMs: 15600, text: "never gonna let you down" },
+    { index: 1, startMs: 7800, endMs: 15_600, text: "never gonna let you down" },
   ],
 }

@@ -9,6 +9,8 @@ pnpm install
 pnpm dev          # ローカル開発サーバ
 pnpm test         # shared/chunker.ts のユニットテスト
 pnpm type-check    # SPA + Cloudflare Pages Functions
+pnpm lint          # oxlint (vite-plus経由)
+pnpm format        # oxfmt (vite-plus経由)
 pnpm build         # 本番ビルド (dist/)
 ```
 

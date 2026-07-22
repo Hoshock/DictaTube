@@ -37,3 +37,6 @@ __screenshots__/
 # Cloudflare
 .wrangler/
 .dev.vars
+
+# playwright-cli session artifacts
+.playwright-cli/

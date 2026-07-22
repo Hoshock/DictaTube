@@ -16,38 +16,43 @@ export interface Json3Captions {
   events: Json3Event[]
 }
 
+const NO_OFFSET_MS = 0
+const FIRST_INDEX = 0
+const LAST_INDEX_OFFSET = -1
+const INDEX_STEP = 1
+const EMPTY_LENGTH = 0
+
+const tokenizeSegment = (segment: Json3Segment, eventStartMs: number): Word[] => {
+  const startMs = eventStartMs + (segment.tOffsetMs ?? NO_OFFSET_MS)
+
+  return segment.utf8
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((text) => ({ text, startMs, endMs: startMs }))
+}
+
+const fillWordEndTimes = (words: Word[]): Word[] =>
+  words.map((word, wordIndex) => {
+    const nextWord = words[wordIndex + INDEX_STEP]
+    if (!nextWord) {
+      return word
+    }
+    return Object.assign({}, word, { endMs: nextWord.startMs })
+  })
+
 /**
  * ローリング表示の自動字幕は前後のイベントで単語が重複するため、
  * aAppend イベントを除外して単語ストリームに復元する (docs/design.md 参照)。
  */
-export function parseJson3Captions(captions: Json3Captions): Word[] {
-  const words: Word[] = []
-
-  for (const event of captions.events) {
-    if (event.aAppend || !event.segs) {
-      continue
-    }
-
-    for (const seg of event.segs) {
-      const startMs = event.tStartMs + (seg.tOffsetMs ?? 0)
-
-      for (const token of seg.utf8.trim().split(/\s+/)) {
-        if (token === "") {
-          continue
-        }
-        words.push({ text: token, startMs, endMs: startMs })
-      }
-    }
-  }
+export const parseJson3Captions = (captions: Json3Captions): Word[] => {
+  const words = captions.events
+    .filter((event) => !event.aAppend && event.segs)
+    .flatMap((event) =>
+      (event.segs ?? []).flatMap((segment) => tokenizeSegment(segment, event.tStartMs)),
+    )
 
   return fillWordEndTimes(words)
-}
-
-function fillWordEndTimes(words: Word[]): Word[] {
-  return words.map((word, index) => {
-    const nextWord = words[index + 1]
-    return nextWord ? { ...word, endMs: nextWord.startMs } : word
-  })
 }
 
 export interface ChunkOptions {
@@ -58,55 +63,101 @@ export interface ChunkOptions {
 const DEFAULT_MIN_DURATION_MS = 8000
 const DEFAULT_MIN_PAUSE_MS = 350
 
+interface BoundaryCheck {
+  word: Word
+  nextWord: Word
+  chunkStart: Word
+}
+
+const getBoundaryCheck = (
+  words: Word[],
+  wordIndex: number,
+  chunkStartIndex: number,
+): BoundaryCheck | undefined => {
+  const word = words[wordIndex]
+  const nextWord = words[wordIndex + INDEX_STEP]
+  const chunkStart = words[chunkStartIndex]
+  if (!word || !nextWord || !chunkStart) {
+    return
+  }
+  return { word, nextWord, chunkStart }
+}
+
+const isBoundary = (check: BoundaryCheck, minDurationMs: number, minPauseMs: number): boolean => {
+  const duration = check.word.endMs - check.chunkStart.startMs
+  const pause = check.nextWord.startMs - check.word.endMs
+  return duration >= minDurationMs && pause >= minPauseMs
+}
+
+const findBoundaryIndices = (
+  words: Word[],
+  minDurationMs: number,
+  minPauseMs: number,
+): number[] => {
+  const lastWordIndex = words.length - INDEX_STEP
+  const boundaries: number[] = []
+  let chunkStartIndex = FIRST_INDEX
+
+  for (let wordIndex = FIRST_INDEX; wordIndex < lastWordIndex; wordIndex += INDEX_STEP) {
+    const check = getBoundaryCheck(words, wordIndex, chunkStartIndex)
+    if (check && isBoundary(check, minDurationMs, minPauseMs)) {
+      boundaries.push(wordIndex)
+      chunkStartIndex = wordIndex + INDEX_STEP
+    }
+  }
+
+  return [...boundaries, lastWordIndex]
+}
+
+interface ChunkRange {
+  start: number
+  end: number
+}
+
+const toChunkRanges = (boundaries: number[]): ChunkRange[] => {
+  const ranges: ChunkRange[] = []
+  let rangeStart = FIRST_INDEX
+  for (const boundaryEnd of boundaries) {
+    ranges.push({ start: rangeStart, end: boundaryEnd })
+    rangeStart = boundaryEnd + INDEX_STEP
+  }
+  return ranges
+}
+
+const buildChunk = (words: Word[], range: ChunkRange, chunkIndex: number): Chunk | undefined => {
+  const slice = words.slice(range.start, range.end + INDEX_STEP)
+  const [first] = slice
+  const last = slice.at(LAST_INDEX_OFFSET)
+  if (!first || !last) {
+    return
+  }
+
+  return {
+    index: chunkIndex,
+    startMs: first.startMs,
+    endMs: last.endMs,
+    text: slice.map((word) => word.text).join(" "),
+  }
+}
+
+const isChunk = (chunk: Chunk | undefined): chunk is Chunk => typeof chunk !== "undefined"
+
 /**
  * 「約 8 秒たまり、かつ 0.35 秒以上の発話の切れ目」でチャンクに分割する。
  * どちらか一方だけでは区切らない (docs/design.md 参照)。
  */
-export function chunkWords(words: Word[], options: ChunkOptions = {}): Chunk[] {
+export const chunkWords = (words: Word[], options: ChunkOptions = {}): Chunk[] => {
   const minDurationMs = options.minDurationMs ?? DEFAULT_MIN_DURATION_MS
   const minPauseMs = options.minPauseMs ?? DEFAULT_MIN_PAUSE_MS
 
-  if (words.length === 0) {
+  if (words.length === EMPTY_LENGTH) {
     return []
   }
 
-  const boundaries: number[] = []
-  let chunkStartIndex = 0
+  const boundaries = findBoundaryIndices(words, minDurationMs, minPauseMs)
+  const ranges = toChunkRanges(boundaries)
 
-  for (let i = 0; i < words.length - 1; i++) {
-    const word = words[i]
-    const nextWord = words[i + 1]
-    const chunkStart = words[chunkStartIndex]
-    if (!word || !nextWord || !chunkStart) {
-      continue
-    }
-
-    const duration = word.endMs - chunkStart.startMs
-    const pause = nextWord.startMs - word.endMs
-
-    if (duration >= minDurationMs && pause >= minPauseMs) {
-      boundaries.push(i)
-      chunkStartIndex = i + 1
-    }
-  }
-  boundaries.push(words.length - 1)
-
-  const chunks: Chunk[] = []
-  let start = 0
-  for (const [index, end] of boundaries.entries()) {
-    const slice = words.slice(start, end + 1)
-    const first = slice[0]
-    const last = slice[slice.length - 1]
-    if (first && last) {
-      chunks.push({
-        index,
-        startMs: first.startMs,
-        endMs: last.endMs,
-        text: slice.map((w) => w.text).join(" "),
-      })
-    }
-    start = end + 1
-  }
-
-  return chunks
+  return ranges
+    .map((range, chunkIndex) => buildChunk(words, range, chunkIndex))
+    .filter((chunk) => isChunk(chunk))
 }

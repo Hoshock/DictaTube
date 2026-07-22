@@ -10,7 +10,7 @@ interface ChunkRow {
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const videoId = context.params.videoId
+  const { videoId } = context.params
   if (typeof videoId !== "string") {
     return Response.json({ error: "invalid video id" }, { status: 400 })
   }

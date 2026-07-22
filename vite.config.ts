@@ -39,10 +39,24 @@ export default defineConfig({
       "no-async-await": "off",
       "sort-imports": ["error", { allowSeparatedGroups: true }],
       "sort-keys": "allow",
+      // これら2組は--fixが互いに元へ戻し合う自己矛盾ペア。
+      // Restriction側 (no-rest-spread-properties / no-undefined) を残す。
+      "prefer-object-spread": "off",
+      "no-typeof-undefined": "off",
+      // No-null/no-undefinedが両方有効だとリテラルで「未設定」を表す手段がなくなる一方、
+      // 通常のカウンタ変数は初期化が必須。両立できないためoffにする。
+      "init-declarations": "off",
     },
     env: {
       browser: true,
       builtin: true,
+      node: true,
+    },
+    // YouTube IFrame Player APIのグローバル名前空間 (app/youtube-iframe-api.ts) と
+    // Vue SFCのコンパイラマクロ (app/views/player-view.vue)。
+    globals: {
+      YT: "readonly",
+      defineProps: "readonly",
     },
   },
   fmt: {

@@ -26,5 +26,6 @@ GitHub Pages is static-only: no server, no D1, no Cloudflare Access. `/api/*` ca
 ### Cons
 
 - The preview cannot exercise anything backend-dependent: real caption import, D1-backed progress, or Cloudflare Access. It only proves the SPA renders and navigates correctly.
-- Two build modes (`VITE_DEMO_MODE` on/off) mean the demo path can silently drift from real API behavior if `shared/types.ts` changes without updating `app/demoData.ts`.
-- Requires a one-time manual step outside this repo: repository Settings → Pages → Build and deployment → Source = "GitHub Actions". No available tooling can flip this from here.
+- Two build modes (`VITE_DEMO_MODE` on/off) mean the demo path can silently drift from real API behavior if `shared/types.ts` changes without updating `app/demo-data.ts`.
+
+No manual repository setup is required: `actions/configure-pages` calls the Pages API's `findOrCreatePagesSite`, which creates the Pages site with `build_type: workflow` on first run given the `pages: write` permission already granted in `gh-pages.yml`.
