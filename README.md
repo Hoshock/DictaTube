@@ -7,6 +7,7 @@ YouTube の自動字幕でディクテーション学習をするための個人
 ```bash
 pnpm install
 pnpm dev          # ローカル開発サーバ
+pnpm preview       # ビルド結果をworkerd経由で確認
 pnpm test         # shared/chunker.ts のユニットテスト
 pnpm type-check    # SPA (src/) + Cloudflare Worker (worker/)
 pnpm lint          # oxlint (vite-plus経由)

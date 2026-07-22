@@ -12,6 +12,7 @@ pnpm lint          # vp lint . --fix — close to vite-plus's own defaults, see 
 pnpm format        # vp fmt .
 pnpm build         # vite build; add VITE_DEMO_MODE=true VITE_BASE_PATH=/DictaTube/ to reproduce the GitHub Pages build locally
 pnpm dev           # vite dev server
+pnpm preview       # serves the last build through workerd — see Gotchas re: VITE_BASE_PATH
 pnpm cf-typegen    # regenerate worker-configuration.d.ts after editing wrangler.jsonc — also runs on postinstall
 ```
 
@@ -27,7 +28,7 @@ pnpm cf-typegen    # regenerate worker-configuration.d.ts after editing wrangler
 │   ├── index.ts             # fetch(request, env, ctx) — routes by hand, then falls back to env.ASSETS.fetch()
 │   └── routes/              # one file per resource, not per HTTP method (unlike the old Pages Functions layout)
 ├── shared/                  # chunker.ts + types.ts, imported by both src/ and worker/
-├── db/schema.sql             # D1 schema (videos/chunks/progress); no migration tool yet
+├── db/schema.sql             # D1 schema (videos/chunks/progress); applied via `wrangler d1 migrations` (migrations_dir in wrangler.jsonc), not yet run against a real D1 instance
 ├── docs/design.md            # architecture + status, in Japanese
 ├── docs/adr/                 # one ADR per architectural decision, in English
 ├── wrangler.jsonc            # Worker name, D1 binding, assets binding — main points at worker/index.ts

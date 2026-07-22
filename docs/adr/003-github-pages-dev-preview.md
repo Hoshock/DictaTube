@@ -1,4 +1,4 @@
-# ADR-003: Use GitHub Pages as a dev-preview deployment, separate from the Cloudflare Pages production target
+# ADR-003: Use GitHub Pages as a dev-preview deployment, separate from the Cloudflare production target
 
 Date: 2026-07-22
 
