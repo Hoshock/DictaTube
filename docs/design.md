@@ -17,7 +17,7 @@ Cloudflare Workers (holo-shadowing.workers.dev)
          └─ YouTube 字幕取得 (経路はスパイクで確定)
     ▲
     │ mainへのpushで自動デプロイ (deploy-production.yml)
-[GitHub: Hoshock/DictaTube (ソースコードのみ)]
+[GitHub: Hoshock/HoloShadowing (ソースコードのみ)]
     develop ブランチへのpushはGitHub Pagesのdevプレビューに向く (別経路、下記参照)
 ```
 
