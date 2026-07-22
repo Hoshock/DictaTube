@@ -86,4 +86,4 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 
 ## 開発時の見た目確認 (GitHub Pages)
 
-Cloudflareにログインできないサンドボックス環境からでも見た目を確認できるよう、GitHub ActionsでGitHub Pagesにdevプレビューをデプロイする ([ADR-003](./adr/003-github-pages-dev-preview.md))。バックエンドを持たないため `VITE_DEMO_MODE=true` ビルドでは `/api/*` を呼ばずモックデータ (`src/demo-data.ts`) を表示する。本番の判断基準にはならない (UIの見た目確認専用)。手動設定は不要 — `actions/configure-pages` が初回実行時にPagesサイト自体を自動作成する。
+Cloudflareにログインできないサンドボックス環境からでも見た目を確認できるよう、GitHub ActionsでGitHub Pagesにdevプレビューをデプロイする ([ADR-003](./adr/003-github-pages-dev-preview.md))。バックエンドを持たないため `VITE_DEMO_MODE=true` ビルドでは `/api/*` を呼ばずモックデータ (`src/demo-data.ts`) を表示する。本番の判断基準にはならない (UIの見た目確認専用)。**手動設定が必要** — `gh-pages.yml`に`pages: write`があっても、`actions/configure-pages`はデフォルトのGITHUB_TOKENの権限だけではPagesサイトを新規作成できない (実際の失敗ログで確認: `enablement: false`のままだと未有効化リポジトリでは`Get Pages site`が404、`enablement: true`を試すと`Create Pages site failed: Resource not accessible by integration`)。リポジトリのオーナーがSettings → Pages → Build and deployment → SourceでGitHub Actionsを選ぶ一度だけの操作が必要。
