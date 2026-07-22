@@ -7,17 +7,18 @@
     "dev": "vp dev",
     "build": "vp build",
     "preview": "vp preview",
-    "type-check": "vue-tsc --build && tsc -p tsconfig.functions.json",
+    "type-check": "vue-tsc --build && tsc -p tsconfig.worker.json",
     "test": "vitest run",
     "lint": "vp lint . --fix",
-    "format": "vp fmt app/ functions/ shared/"
+    "format": "vp fmt src/ worker/ shared/"
   },
   "dependencies": {
     "vue": "^3.5.32",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260101.0",
+    "@cloudflare/vite-plugin": "^1.46.0",
+    "@cloudflare/workers-types": "^5.20260722.1",
     "@tailwindcss/vite": "^4.3.0",
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^24.12.2",
@@ -30,10 +31,18 @@
     "vite-plugin-vue-devtools": "^8.1.1",
     "vite-plus": "catalog:",
     "vitest": "^3.2.4",
-    "vue-tsc": "^3.2.6"
+    "vue-tsc": "^3.2.6",
+    "wrangler": "^4.113.0"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
-  "packageManager": "pnpm@10.33.0"
+  "packageManager": "pnpm@10.33.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "workerd"
+    ]
+  }
 }

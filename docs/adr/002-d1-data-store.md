@@ -4,7 +4,7 @@ Date: 2026-07-22
 
 ## Status
 
-Accepted
+Accepted. The access syntax changed with the move to Cloudflare Workers — see [ADR-004](004-cloudflare-workers-vite-plugin.md): `env.DB` in a Worker `fetch` handler instead of `context.env.DB` in a `PagesFunction`. The decision to use D1 itself, and everything below, is unchanged.
 
 ## Decision
 

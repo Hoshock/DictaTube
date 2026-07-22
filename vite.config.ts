@@ -1,5 +1,6 @@
 import { URL, fileURLToPath } from "node:url"
 
+import { cloudflare } from "@cloudflare/vite-plugin"
 import { defineConfig } from "vite-plus"
 import tailwindcss from "@tailwindcss/vite"
 import vue from "@vitejs/plugin-vue"
@@ -8,12 +9,12 @@ import vueDevTools from "vite-plugin-vue-devtools"
 // https://vite.dev/config/
 export default defineConfig({
   // GitHub Pages のdevプレビュー用ビルドだけ /DictaTube/ を渡す (CI参照)。
-  // Cloudflare Pages (本番) はルート配信なので未設定時は "/"。
+  // Cloudflare Workers (本番) はルート配信なので未設定時は "/"。
   base: process.env.VITE_BASE_PATH ?? "/",
-  plugins: [vue(), vueDevTools(), tailwindcss()],
+  plugins: [vue(), vueDevTools(), tailwindcss(), cloudflare()],
   resolve: {
     alias: {
-      "@": fileURLToPath(new URL("app", import.meta.url)),
+      "@": fileURLToPath(new URL("src", import.meta.url)),
       "@shared": fileURLToPath(new URL("shared", import.meta.url)),
     },
   },
@@ -52,8 +53,8 @@ export default defineConfig({
       builtin: true,
       node: true,
     },
-    // YouTube IFrame Player APIのグローバル名前空間 (app/youtube-iframe-api.ts) と
-    // Vue SFCのコンパイラマクロ (app/views/player-view.vue)。
+    // YouTube IFrame Player APIのグローバル名前空間 (src/youtube-iframe-api.ts) と
+    // Vue SFCのコンパイラマクロ (src/views/player-view.vue)。
     globals: {
       YT: "readonly",
       defineProps: "readonly",

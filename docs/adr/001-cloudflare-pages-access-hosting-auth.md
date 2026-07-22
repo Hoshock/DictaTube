@@ -4,7 +4,7 @@ Date: 2026-07-22
 
 ## Status
 
-Accepted
+Accepted. The hosting product changed from Cloudflare Pages to Cloudflare Workers — see [ADR-004](004-cloudflare-workers-vite-plugin.md). Everything below about Access/auth is unchanged; only "Pages" in the text should now be read as "Workers".
 
 ## Decision
 

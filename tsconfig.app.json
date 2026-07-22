@@ -1,7 +1,7 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["env.d.ts", "app/**/*", "app/**/*.vue", "shared/**/*"],
-  "exclude": ["app/**/__tests__/*", "shared/**/*.test.ts"],
+  "include": ["env.d.ts", "src/**/*", "src/**/*.vue", "shared/**/*"],
+  "exclude": ["src/**/__tests__/*", "shared/**/*.test.ts"],
   "compilerOptions": {
     // YouTube IFrame Player API's ambient `YT` namespace (chunk-loop playback).
     "types": ["youtube"],
@@ -11,7 +11,7 @@
 
     // Path mapping for cleaner imports.
     "paths": {
-      "@/*": ["./app/*"],
+      "@/*": ["./src/*"],
       "@shared/*": ["./shared/*"]
     },
 

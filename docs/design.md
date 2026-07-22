@@ -10,9 +10,9 @@ YouTube の自動字幕を使ってリスニング・ディクテーション学
 [スマホ / PC ブラウザ]
     │ GitHub アカウントでログイン (Cloudflare Access が Hoshock のみ許可)
     ▼
-Cloudflare Pages (dictatube.pages.dev)
-    ├─ SPA: Vue 3 + TypeScript + Vite Plus + Tailwind 4
-    └─ Pages Functions (/api/*)
+Cloudflare Workers (dictatube.workers.dev)
+    ├─ 静的配信: Vue 3 + TypeScript + Vite Plus + Tailwind 4 (dist/client)
+    └─ Worker (worker/index.ts, /api/*)
          ├─ D1: videos / chunks / progress
          └─ YouTube 字幕取得 (経路はスパイクで確定)
     ▲
@@ -20,13 +20,13 @@ Cloudflare Pages (dictatube.pages.dev)
 [GitHub: Hoshock/DictaTube (ソースコードのみ)]
 ```
 
-| レイヤ     | 採用                                  | 補足                                                                           |
-| ---------- | ------------------------------------- | ------------------------------------------------------------------------------ |
-| 配信 + API | Cloudflare Pages + Functions          | GitHub push で自動デプロイ                                                     |
-| 認証       | Cloudflare Access + GitHub IdP        | Hoshock のみ許可。[ADR-001](./adr/001-cloudflare-pages-access-hosting-auth.md) |
-| データ     | Cloudflare D1                         | GitHub 認証情報を持たない。[ADR-002](./adr/002-d1-data-store.md)               |
-| 動画再生   | YouTube IFrame Player API             | チャンクループは seekTo + ポーリング                                           |
-| フロント   | Vue 3 + TypeScript + Vite Plus + pnpm | NCPD-Template-Child の site-sample と同じ流儀                                  |
+| レイヤ     | 採用                                  | 補足                                                                                              |
+| ---------- | ------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 配信 + API | Cloudflare Workers (`@cloudflare/vite-plugin`) | GitHub push で自動デプロイ。Pages Functionsから変更。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md) |
+| 認証       | Cloudflare Access + GitHub IdP        | Hoshock のみ許可。[ADR-001](./adr/001-cloudflare-pages-access-hosting-auth.md)                    |
+| データ     | Cloudflare D1                         | GitHub 認証情報を持たない。[ADR-002](./adr/002-d1-data-store.md)                                  |
+| 動画再生   | YouTube IFrame Player API             | チャンクループは seekTo + ポーリング                                                              |
+| フロント   | Vue 3 + TypeScript + Vite Plus + pnpm | `src/` は素のVite標準 (Childの入れ子`src/app/`とは事情が違う。[ADR-004](./adr/004-cloudflare-workers-vite-plugin.md)) |
 
 すべて無料枠に収まる。
 
@@ -61,7 +61,7 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 - 通る場合: /api/import が字幕取得、チャンク化、D1 保存まで行う。スマホだけで完結
 - 通らない場合: トランスクリプト貼り付け import (ブラウザ内でパース) を主経路にし、Mac 常駐のキューデーモンを補助に置く
 
-チャンク化ロジックは chunker.ts の 1 実装に集約し、SPA と Functions で共有する。
+チャンク化ロジックは chunker.ts の 1 実装に集約し、SPA と Worker で共有する。
 
 ## 実装ステップ
 
@@ -79,10 +79,11 @@ Workers から YouTube に届くかのスパイク結果で確定する。
 
 - wrangler 4.112.0 導入済み。brew の cloudflare-wrangler を使う (npx 経由は社内証明書の検証で失敗する)
 - wrangler login は未実施
-- Zero Trust の GitHub IdP 接続と Pages プロジェクト作成も未実施。scaffold の段階で設定する
+- Zero Trust の GitHub IdP 接続とWorkerのカスタムドメイン設定も未実施。scaffold の段階で設定する
 - ステップ1(scaffold)・ステップ2(Home一覧 + /api/videos)・ステップ3(Player + チャンクループ、YouTube IFrame Player API)はコードレベルで完了。progress保存APIも先行実装済み。ただしCloudflareへのログインができない環境で書いたため、実際のD1・Access・YouTube再生に対する動作確認はまだ (`pnpm test` / `pnpm type-check` / `pnpm build` はローカルで通過、UIの見た目とルーティングはGitHub Pagesのdevプレビューで確認済み)
 - ステップ0(字幕取得スパイク)とステップ4(import)は未着手。Cloudflareにログインできる環境での作業が必要
+- ディレクトリ構成をNuxt4化する案を検討したが、Childが実はNuxtを使っていない(AWS SAM/CloudFormationの静的サイトサンプル)ことが判明し撤回。代わりに素のVite標準の`src/`命名と、Cloudflareの現行推奨である`@cloudflare/vite-plugin`+Workersへの移行を実施 ([ADR-004](./adr/004-cloudflare-workers-vite-plugin.md))
 
 ## 開発時の見た目確認 (GitHub Pages)
 
-Cloudflareにログインできないサンドボックス環境からでも見た目を確認できるよう、GitHub ActionsでGitHub Pagesにdevプレビューをデプロイする ([ADR-003](./adr/003-github-pages-dev-preview.md))。バックエンドを持たないため `VITE_DEMO_MODE=true` ビルドでは `/api/*` を呼ばずモックデータ (`app/demo-data.ts`) を表示する。本番の判断基準にはならない (UIの見た目確認専用)。手動設定は不要 — `actions/configure-pages` が初回実行時にPagesサイト自体を自動作成する。
+Cloudflareにログインできないサンドボックス環境からでも見た目を確認できるよう、GitHub ActionsでGitHub Pagesにdevプレビューをデプロイする ([ADR-003](./adr/003-github-pages-dev-preview.md))。バックエンドを持たないため `VITE_DEMO_MODE=true` ビルドでは `/api/*` を呼ばずモックデータ (`src/demo-data.ts`) を表示する。本番の判断基準にはならない (UIの見た目確認専用)。手動設定は不要 — `actions/configure-pages` が初回実行時にPagesサイト自体を自動作成する。

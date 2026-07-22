@@ -1,7 +1,7 @@
 name: Deploy dev preview to GitHub Pages
 
-# 開発中の見た目確認用。本番はCloudflare Pages (docs/adr/001, 002)。
-# GitHub PagesはD1/Functionsを持たないのでVITE_DEMO_MODE=trueでモックデータを使う。
+# 開発中の見た目確認用。本番はCloudflare Workers (docs/adr/001, 002, 004)。
+# GitHub PagesはD1/Workerを持たないのでVITE_DEMO_MODE=trueでモックデータを使う。
 on:
   push:
     branches:
@@ -36,7 +36,7 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: dist/client
 
   deploy:
     needs: build
