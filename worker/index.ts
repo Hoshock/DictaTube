@@ -1,5 +1,4 @@
 import { getVideo, getVideoChunks, listVideos } from "./routes/videos"
-import type { Env } from "./types"
 import { saveProgress } from "./routes/progress"
 
 const VIDEOS_LIST_PATH = "/api/videos"

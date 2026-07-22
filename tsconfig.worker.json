@@ -1,12 +1,11 @@
 // TSConfig for the Cloudflare Worker (worker/), which runs on the Workers runtime, not the browser.
 {
   "extends": "@tsconfig/node24/tsconfig.json",
-  "include": ["worker/**/*", "shared/**/*"],
+  "include": ["worker/**/*", "shared/**/*", "worker-configuration.d.ts"],
   "exclude": ["shared/**/*.test.ts"],
   "compilerOptions": {
     "module": "esnext",
     "moduleResolution": "bundler",
-    "types": ["@cloudflare/workers-types"],
     "noEmit": true,
     "paths": {
       "@shared/*": ["./shared/*"]

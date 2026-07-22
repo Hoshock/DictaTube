@@ -37,6 +37,7 @@ __screenshots__/
 # Cloudflare
 .wrangler/
 .dev.vars
+worker-configuration.d.ts
 
 # playwright-cli session artifacts
 .playwright-cli/
