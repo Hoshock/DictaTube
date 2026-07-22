@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
             :disabled="!isPlayerReady || !currentChunk"
             @click="togglePlayPause"
           >
-            {{ isPlaying ? "pause" : "play" }}
+            play
           </button>
           <button
             type="button"
